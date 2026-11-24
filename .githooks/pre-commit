@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+python3 scripts/public_guard.py --staged
+uv run --project backend --frozen python scripts/repo_tools.py gitleaks git --pre-commit --redact --staged
+uv run --project backend --frozen ruff check backend scripts
+uv run --project backend --frozen ruff format --check backend scripts
+uv run --project backend --frozen python scripts/repo_tools.py actionlint
+git diff --cached --check

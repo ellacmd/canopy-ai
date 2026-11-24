@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+  schedule:
+    - cron: "17 8 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality and secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: "0.10.10"
+      - run: uv sync --project backend --frozen --python 3.12
+      - name: Validate PR title for squash merge
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 scripts/check_commit_message.py --title "$PR_TITLE"
+      - run: uv run --project backend --frozen ruff check backend scripts
+      - run: uv run --project backend --frozen ruff format --check backend scripts
+      - run: uv run --project backend --frozen python scripts/repo_tools.py actionlint
+      - run: python3 scripts/public_guard.py
+      - run: uv run --project backend --frozen python scripts/repo_tools.py gitleaks git --redact --log-opts=--all
+
+  backend-tests:
+    name: Backend tests (Python ${{ matrix.python }}, PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: "3.12"
+            postgres: "15"
+          - python: "3.13"
+            postgres: "17"
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: canopy_test_only
+          POSTGRES_DB: canopy_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      ENVIRONMENT: test
+      POSTGRES_TEST_URL: postgresql+psycopg://postgres:canopy_test_only@localhost:5432/canopy_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: "0.10.10"
+      - run: uv sync --frozen --python "${{ matrix.python }}"
+      - run: uv run --frozen pytest -q
+      - name: Build backend wheel
+        run: uv build --wheel --out-dir "$RUNNER_TEMP/wheel"
+
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: "0.10.10"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - run: uv sync --project backend --frozen --python 3.12
+      - run: uv run --project backend --frozen pip-audit --local --skip-editable
+      - run: npm audit --package-lock-only --audit-level=high
+
+  required:
+    name: Required CI
+    if: ${{ always() }}
+    needs: [quality, backend-tests, dependencies]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every check to pass
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          checks = json.loads(os.environ["NEEDS_JSON"])
+          failed = [name for name, job in checks.items() if job["result"] != "success"]
+          if failed:
+              print("Required checks failed or were skipped: " + ", ".join(failed))
+              sys.exit(1)
+          print("All required checks passed.")
+          PY
