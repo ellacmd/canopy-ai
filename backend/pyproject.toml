@@ -11,7 +11,7 @@ dependencies = [
   "alembic>=1.14,<2",
   "psycopg[binary]>=3.2,<4",
   "httpx>=0.28,<1",
-  "google-genai>=1.0,<3",
+  "google-genai>=1.0,<4",
   "email-validator>=2.2,<3",
   "python-dotenv>=1.0,<2",
 ]
