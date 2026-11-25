@@ -30,9 +30,11 @@ from canopy.auth import (
 from canopy.config import Settings
 from canopy.db import get_db, make_engine
 from canopy.models import Customer, Order, OrderItem, Product, Shipment
+from canopy.policy_api import router as policy_router
 from canopy.support_api import customer_tools
 from canopy.support_api import router as support_router
 from canopy.tools import SupportTools
+from canopy.workflow_api import router as workflow_router
 
 
 class OrderSummary(BaseModel):
@@ -143,7 +145,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
         engine.dispose()
 
-    app = FastAPI(title="Canopy AI", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="Canopy AI", version="0.4.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.engine = engine
     limiter = LoginLimiter()
@@ -188,13 +190,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health/live", tags=["health"])
     def live():
-        return {"status": "ok", "service": "canopy", "phase": 2}
+        return {"status": "ok", "service": "canopy", "phase": 4}
 
     @app.get("/health/ready", tags=["health"])
     def ready(db: Session = Depends(get_db)):
         try:
             revisions = db.scalars(text("SELECT version_num FROM alembic_version")).all()
-            if revisions != ["0003"]:
+            if revisions != ["0005"]:
                 raise HTTPException(503, "Database migrations are not current")
             db.execute(select(Customer.id).limit(1))
         except SQLAlchemyError:
@@ -304,4 +306,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
 
     app.include_router(support_router)
+    app.include_router(policy_router)
+    app.include_router(workflow_router)
     return app

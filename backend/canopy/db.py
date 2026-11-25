@@ -29,13 +29,17 @@ def make_engine(settings: Settings, *, runtime_role: bool = True) -> Engine:
         @event.listens_for(engine, "connect")
         def enable_foreign_keys(connection, _):
             connection.execute("PRAGMA foreign_keys=ON")
-    elif runtime_role:
+    elif engine.dialect.name == "postgresql":
 
         @event.listens_for(engine, "connect")
         def backend_role(connection, _):
             # Fixed role, never user-controlled. Migrations run as the database owner.
             with connection.cursor() as cursor:
-                cursor.execute("SET ROLE service_role")
+                if runtime_role:
+                    cursor.execute("SET ROLE service_role")
+                # pgvector may be installed in Supabase's extensions schema.
+                # Both schema names are fixed; application tables remain in public.
+                cursor.execute("SET search_path TO public, extensions")
             connection.commit()
 
     return engine

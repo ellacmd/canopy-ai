@@ -2,10 +2,11 @@
 
 An intelligent customer support platform for the fictional e-commerce store Amazora.
 
-**Current stage: Phase 2 business tools and approved refund rules, connected to hosted Supabase.**
-Order lookup, tracking, simulated refund requests, and human escalation work through the API.
-The UI, policy retrieval, and LangGraph workflows remain deferred.
-Gemini is the selected model provider; it is not called by the API in this phase.
+**Current stage: Phase 4 authenticated LangGraph support workflows.**
+Multi-turn order/tracking/policy support, explicit simulated-refund confirmation, human escalation,
+checkpoint memory, validated SSE responses, and safe execution metadata work through the backend.
+Policy retrieval uses a separately frozen Gemini embedding model and versioned citations. UI work
+remains deferred.
 
 ## Start the backend
 
@@ -104,6 +105,28 @@ Use synthetic data while prototyping with a free tier. See Google's current
 [pricing and data-use terms](https://aistudio.google.com/docs/pricing).
 No provider request is made at startup, during health checks, or by ordinary tests.
 
+### Policy embeddings and citations
+
+Phase 3 uses `gemini-embedding-001` with 768 normalized dimensions, independently of the chat model.
+Run `uv run python -m canopy embedding-smoke`, then `policy-index` and `policy-evaluate` to build and
+evaluate the approved Markdown corpus. Indexing is repeatable; unchanged sources make no provider calls.
+The authenticated `POST /api/policies/search` endpoint returns source/version citations and explicit
+missing/conflicting evidence. Configure provider data terms suitable for customer query text before
+setting `POLICY_SEARCH_ENABLED=true`; it defaults to false. Public/synthetic CLI indexing and evaluation
+do not require that flag. See [Phase 3 review](docs/phase-3-review.md) for model pricing/terms, commands,
+response states, evaluation, and migration recovery.
+
+### Support workflow
+
+Configure provider data terms suitable for customer messages/order context before setting
+`WORKFLOW_ENABLED=true`; it defaults to false. Enable policy search separately for cited evidence.
+Create a conversation with `POST /api/conversations`, then send turns with a stable `Idempotency-Key`.
+Refunds require a separate explicit confirmation of a specific expiring preview; chat consent alone
+cannot submit one. Read [Phase 4 review](docs/phase-4-review.md) for JSON contracts, SSE behavior,
+turn-boundary PostgreSQL memory, provider errors, token/cost baselines, evaluation, and recovery.
+Optional metadata-only LangSmith export requires `WORKFLOW_TRACING_ENABLED=true` and a backend-only
+`LANGSMITH_API_KEY`; automatic raw graph tracing stays disabled.
+
 ## Configure Supabase authentication and PostgreSQL
 
 1. Create a Supabase project. Set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` in `backend/.env`.
@@ -155,6 +178,12 @@ Use HTTPS for production. Production startup rejects SQLite and incomplete Auth 
 | POST | `/api/auth/refresh` | Refresh cookie |
 | POST | `/api/auth/logout` | Clear/revoke current session |
 | GET | `/api/auth/me` | Verified account |
+| POST | `/api/policies/search` | Verified account; cited policy excerpts, when query embedding is enabled |
+| POST/GET | `/api/conversations` | Create/list owned customer conversations |
+| GET | `/api/conversations/{id}/messages` | Owned conversation history |
+| GET | `/api/conversations/{id}/executions` | Owned safe execution metadata |
+| POST | `/api/conversations/{id}/turns` | Atomic support turn, when enabled; `Idempotency-Key` required |
+| POST | `/api/conversations/{id}/turns/stream` | Progress plus validated response SSE |
 | GET | `/api/orders` | Customer's own orders; bounded pagination |
 | GET | `/api/orders/{id}` | Customer's own order, items, and shipment |
 | GET | `/api/orders/lookup/{order_number}` | Customer's own order by number |
@@ -170,7 +199,8 @@ Use HTTPS for production. Production startup rejects SQLite and incomplete Auth 
 | PATCH | `/api/admin/escalations/{id}` | Support/admin assignment and status |
 | GET | `/api/admin/summary` | Support/admin aggregate counts |
 
-See [Phase 2 review](docs/phase-2-review.md) for a direct API walkthrough. Customer chat comes in Phase 4.
+See [Phase 2 review](docs/phase-2-review.md) for business APIs and
+[Phase 4 review](docs/phase-4-review.md) for the multi-turn support workflow.
 
 ## Synthetic dataset
 
@@ -199,12 +229,14 @@ The PostgreSQL integration test runs only when `POSTGRES_TEST_URL` points to a *
 database. The tests create roles, migrate, seed, and verify runtime roles, RLS, client denial,
 concurrent refund retries/reservations, and composite ownership constraints.
 Never set that variable to a shared or production database. GitHub Actions provisions an isolated PostgreSQL
-service and runs this test. The workflow has been authored; a remote CI run is not yet verified.
+service with pgvector and runs these checks. The updated Phase 3 workflow has not been run remotely.
 The local setup command separately verifies real local Supabase authentication, refresh/logout,
 cross-customer denial, role restrictions, direct REST database denial, and forced PostgreSQL RLS.
 Phase 2 verification includes the full suite against a fresh disposable PostgreSQL database; see
 [Phase 2 review](docs/phase-2-review.md) for the final results. Real local and hosted Auth verification
 have also passed.
+Phase 3 adds index atomicity/concurrency, corpus integrity, evidence abstention, citation versions,
+embedding failures, real pgvector search, and Supabase extension-schema compatibility tests.
 
 ## Project layout
 
@@ -224,7 +256,7 @@ src/                   Reserved for the later Next.js interface; currently empty
 ```
 
 The earlier frontend scaffold remains parked. No application is deployed.
-No LangGraph/LangSmith dependency is needed until the AI workflow phase.
+LangGraph and LangSmith are backend-only dependencies; no frontend provider keys are used.
 
 ## Repository workflow and handoff
 

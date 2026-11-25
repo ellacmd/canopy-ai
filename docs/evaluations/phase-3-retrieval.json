@@ -1,0 +1,482 @@
+{
+  "embedding_space": "gemini-embedding-001:768:unit-v1",
+  "rules_version": "amazora-returns-v1.0",
+  "minimum_cosine_similarity": 0.57,
+  "ranking_version": "cosine-idf-v1",
+  "cases": 34,
+  "passed": 34,
+  "positive_recall_at_3": 1.0,
+  "negative_abstention": 1.0,
+  "results": [
+    {
+      "id": "window-30",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#return-window",
+        "returns-v1.0.md#payment-and-order-state",
+        "returns-v1.0.md#damage-and-exceptions"
+      ],
+      "similarities": [
+        0.736299,
+        0.674254,
+        0.663877
+      ],
+      "latency_ms": 5794.6
+    },
+    {
+      "id": "window-31",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#return-window",
+        "returns-v1.0.md#damage-and-exceptions",
+        "returns-v1.0.md#payment-and-order-state"
+      ],
+      "similarities": [
+        0.761683,
+        0.717507,
+        0.721142
+      ],
+      "latency_ms": 1544.0
+    },
+    {
+      "id": "window-utc",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#return-window",
+        "submission-v1.0.md#simulation-and-physical-returns",
+        "returns-v1.0.md#payment-and-order-state"
+      ],
+      "similarities": [
+        0.6804,
+        0.660956,
+        0.653114
+      ],
+      "latency_ms": 1391.0
+    },
+    {
+      "id": "payment-pending",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#payment-and-order-state",
+        "submission-v1.0.md#simulation-and-physical-returns",
+        "returns-v1.0.md#excluded-items"
+      ],
+      "similarities": [
+        0.676522,
+        0.642132,
+        0.653781
+      ],
+      "latency_ms": 2147.8
+    },
+    {
+      "id": "cancelled",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#payment-and-order-state",
+        "returns-v1.0.md#return-window",
+        "amounts-v1.0.md#discounts-tax-and-shipping-allocations"
+      ],
+      "similarities": [
+        0.690156,
+        0.696724,
+        0.655161
+      ],
+      "latency_ms": 1415.5
+    },
+    {
+      "id": "delivery-missing",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#payment-and-order-state",
+        "returns-v1.0.md#return-window"
+      ],
+      "similarities": [
+        0.616926,
+        0.63098
+      ],
+      "latency_ms": 2288.3
+    },
+    {
+      "id": "currency",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#payment-and-order-state",
+        "amounts-v1.0.md#exact-paid-amounts",
+        "amounts-v1.0.md#partial-quantities-and-reservations"
+      ],
+      "similarities": [
+        0.678546,
+        0.626719,
+        0.648826
+      ],
+      "latency_ms": 1569.8
+    },
+    {
+      "id": "gift-card",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#excluded-items",
+        "returns-v1.0.md#damage-and-exceptions",
+        "amounts-v1.0.md#partial-quantities-and-reservations"
+      ],
+      "similarities": [
+        0.749659,
+        0.612676,
+        0.618845
+      ],
+      "latency_ms": 1601.4
+    },
+    {
+      "id": "excluded",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#excluded-items",
+        "returns-v1.0.md#payment-and-order-state",
+        "returns-v1.0.md#damage-and-exceptions"
+      ],
+      "similarities": [
+        0.749931,
+        0.731484,
+        0.722634
+      ],
+      "latency_ms": 1614.1
+    },
+    {
+      "id": "damage",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#damage-and-exceptions",
+        "returns-v1.0.md#return-window",
+        "returns-v1.0.md#excluded-items"
+      ],
+      "similarities": [
+        0.7227,
+        0.682993,
+        0.654207
+      ],
+      "latency_ms": 1744.0
+    },
+    {
+      "id": "wrong-item",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#excluded-items",
+        "returns-v1.0.md#damage-and-exceptions",
+        "amounts-v1.0.md#discounts-tax-and-shipping-allocations"
+      ],
+      "similarities": [
+        0.67892,
+        0.668884,
+        0.676863
+      ],
+      "latency_ms": 1594.0
+    },
+    {
+      "id": "amount",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "amounts-v1.0.md#exact-paid-amounts",
+        "amounts-v1.0.md#discounts-tax-and-shipping-allocations",
+        "amounts-v1.0.md#partial-quantities-and-reservations"
+      ],
+      "similarities": [
+        0.66978,
+        0.687531,
+        0.667501
+      ],
+      "latency_ms": 1605.2
+    },
+    {
+      "id": "allocations",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "amounts-v1.0.md#discounts-tax-and-shipping-allocations",
+        "amounts-v1.0.md#exact-paid-amounts",
+        "amounts-v1.0.md#partial-quantities-and-reservations"
+      ],
+      "similarities": [
+        0.740555,
+        0.639807,
+        0.62481
+      ],
+      "latency_ms": 1687.1
+    },
+    {
+      "id": "shipping",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "amounts-v1.0.md#discounts-tax-and-shipping-allocations"
+      ],
+      "similarities": [
+        0.711901
+      ],
+      "latency_ms": 1597.9
+    },
+    {
+      "id": "partial",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "amounts-v1.0.md#partial-quantities-and-reservations",
+        "returns-v1.0.md#return-window",
+        "returns-v1.0.md#payment-and-order-state"
+      ],
+      "similarities": [
+        0.648858,
+        0.661459,
+        0.641028
+      ],
+      "latency_ms": 1845.0
+    },
+    {
+      "id": "reservations",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "amounts-v1.0.md#partial-quantities-and-reservations",
+        "submission-v1.0.md#duplicate-submissions",
+        "submission-v1.0.md#simulation-and-physical-returns"
+      ],
+      "similarities": [
+        0.751706,
+        0.695332,
+        0.69598
+      ],
+      "latency_ms": 1748.5
+    },
+    {
+      "id": "confirmation",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "submission-v1.0.md#explicit-confirmation",
+        "submission-v1.0.md#simulation-and-physical-returns"
+      ],
+      "similarities": [
+        0.743312,
+        0.661533
+      ],
+      "latency_ms": 1848.3
+    },
+    {
+      "id": "physical-return",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "submission-v1.0.md#simulation-and-physical-returns",
+        "submission-v1.0.md#explicit-confirmation",
+        "submission-v1.0.md#human-support-and-policy-authority"
+      ],
+      "similarities": [
+        0.79609,
+        0.724943,
+        0.673338
+      ],
+      "latency_ms": 1730.2
+    },
+    {
+      "id": "simulation",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "submission-v1.0.md#simulation-and-physical-returns",
+        "amounts-v1.0.md#discounts-tax-and-shipping-allocations"
+      ],
+      "similarities": [
+        0.659191,
+        0.576731
+      ],
+      "latency_ms": 2013.3
+    },
+    {
+      "id": "duplicate",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "submission-v1.0.md#duplicate-submissions",
+        "submission-v1.0.md#simulation-and-physical-returns",
+        "amounts-v1.0.md#partial-quantities-and-reservations"
+      ],
+      "similarities": [
+        0.693901,
+        0.665765,
+        0.663205
+      ],
+      "latency_ms": 1700.1
+    },
+    {
+      "id": "changed-body",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "submission-v1.0.md#duplicate-submissions",
+        "submission-v1.0.md#explicit-confirmation",
+        "amounts-v1.0.md#partial-quantities-and-reservations"
+      ],
+      "similarities": [
+        0.706453,
+        0.637139,
+        0.617948
+      ],
+      "latency_ms": 1735.7
+    },
+    {
+      "id": "authority",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "submission-v1.0.md#human-support-and-policy-authority",
+        "submission-v1.0.md#explicit-confirmation",
+        "submission-v1.0.md#simulation-and-physical-returns"
+      ],
+      "similarities": [
+        0.66731,
+        0.676994,
+        0.620468
+      ],
+      "latency_ms": 1707.9
+    },
+    {
+      "id": "missing-weather",
+      "passed": true,
+      "status": "missing_evidence",
+      "locators": [],
+      "similarities": [],
+      "latency_ms": 1675.7
+    },
+    {
+      "id": "missing-recipe",
+      "passed": true,
+      "status": "missing_evidence",
+      "locators": [],
+      "similarities": [],
+      "latency_ms": 1584.8
+    },
+    {
+      "id": "missing-astronomy",
+      "passed": true,
+      "status": "missing_evidence",
+      "locators": [],
+      "similarities": [],
+      "latency_ms": 1592.2
+    },
+    {
+      "id": "missing-code",
+      "passed": true,
+      "status": "missing_evidence",
+      "locators": [],
+      "similarities": [],
+      "latency_ms": 1531.5
+    },
+    {
+      "id": "paraphrase-window",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#return-window",
+        "returns-v1.0.md#payment-and-order-state",
+        "returns-v1.0.md#damage-and-exceptions"
+      ],
+      "similarities": [
+        0.731459,
+        0.677056,
+        0.666782
+      ],
+      "latency_ms": 1588.5
+    },
+    {
+      "id": "paraphrase-partial",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "amounts-v1.0.md#partial-quantities-and-reservations",
+        "amounts-v1.0.md#discounts-tax-and-shipping-allocations",
+        "returns-v1.0.md#payment-and-order-state"
+      ],
+      "similarities": [
+        0.695306,
+        0.676921,
+        0.656461
+      ],
+      "latency_ms": 1695.3
+    },
+    {
+      "id": "paraphrase-future-date",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "returns-v1.0.md#payment-and-order-state",
+        "returns-v1.0.md#return-window",
+        "returns-v1.0.md#damage-and-exceptions"
+      ],
+      "similarities": [
+        0.57634,
+        0.601955,
+        0.597178
+      ],
+      "latency_ms": 1730.8
+    },
+    {
+      "id": "paraphrase-fresh-key",
+      "passed": true,
+      "status": "evidence_found",
+      "locators": [
+        "amounts-v1.0.md#partial-quantities-and-reservations",
+        "submission-v1.0.md#simulation-and-physical-returns",
+        "submission-v1.0.md#duplicate-submissions"
+      ],
+      "similarities": [
+        0.725674,
+        0.715509,
+        0.685372
+      ],
+      "latency_ms": 1809.0
+    },
+    {
+      "id": "missing-loyalty",
+      "passed": true,
+      "status": "missing_evidence",
+      "locators": [],
+      "similarities": [],
+      "latency_ms": 1682.0
+    },
+    {
+      "id": "missing-hours",
+      "passed": true,
+      "status": "missing_evidence",
+      "locators": [],
+      "similarities": [],
+      "latency_ms": 1572.5
+    },
+    {
+      "id": "missing-ceo",
+      "passed": true,
+      "status": "missing_evidence",
+      "locators": [],
+      "similarities": [],
+      "latency_ms": 1462.2
+    },
+    {
+      "id": "missing-instructions",
+      "passed": true,
+      "status": "missing_evidence",
+      "locators": [],
+      "similarities": [],
+      "latency_ms": 1424.4
+    }
+  ]
+}

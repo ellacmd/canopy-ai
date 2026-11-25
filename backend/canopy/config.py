@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     gemini_max_output_tokens: int = Field(default=512, ge=64, le=2048)
     gemini_timeout_seconds: float = Field(default=20, ge=1, le=60)
     gemini_max_input_characters: int = Field(default=12000, ge=100, le=50000)
+    # Opt in after configuring provider terms suitable for customer-entered query text.
+    # Public/synthetic CLI indexing and evaluation do not require this flag.
+    policy_search_enabled: bool = False
+    workflow_enabled: bool = False
+    workflow_tracing_enabled: bool = False
+    langsmith_api_key: SecretStr = SecretStr("")
 
     @model_validator(mode="after")
     def validate_connections(self):

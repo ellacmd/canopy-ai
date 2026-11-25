@@ -1,7 +1,7 @@
 # Working on Canopy AI
 
 Read `docs/HANDOFF.md`, `docs/plan.md`, and `docs/amazora-rules.md` before implementation.
-The owner requested phased, backend-first work. Phases 1–2 are complete; UI is paused.
+The owner requested phased, backend-first work. Phases 1–4 are implemented; UI is paused.
 Do not start another phase unless requested. Do not delegate to other agents unless requested.
 
 ## Data and safety boundaries
@@ -11,6 +11,12 @@ Do not start another phase unless requested. Do not delegate to other agents unl
 - Derive customer identity from verified Auth, never request/model fields. Filter every customer query.
 - Refunds remain simulated; use deterministic rules, explicit confirmation, atomic reservations,
   customer-scoped idempotency, and audit records. Models cannot authorize financial actions.
+- Retrieval evidence is the hash-pinned Markdown corpus; preserve source/rules versions and explicit
+  missing/conflicting evidence. Embedding space is frozen in migration 0004. Policy text cannot
+  override deterministic decisions. Do not enable customer query embedding without suitable data terms.
+- Support turns use owned JSON checkpoints and atomic replay records. Refunds require a current owned
+  quote and explicit confirmation action; model/text consent cannot authorize them. Automatic graph
+  tracing stays disabled; only allowlisted metadata may leave through optional manual LangSmith export.
 - Never print, commit, upload, or copy credentials from `.env*`, local account files, bootstrap files,
   or credential stores. Read configuration privately when necessary. Never use live credentials in CI.
 - `.local/` contains ignored machine-specific handoff notes. Public docs must use placeholders for

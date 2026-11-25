@@ -58,7 +58,7 @@ simulated and submitted; no payment or automatic completion occurs. See `phase-2
 
 Gate: API/function tests cover ownership, exact amounts, boundaries, rollback, concurrent submissions,
 idempotency, legacy migration, and human-review exceptions. No LLM authorizes monetary actions.
-Phase 2 is the current review point; Phase 3 and UI work remain deferred.
+Phase 2 passed its review gate. UI work remains deferred.
 
 Verification on 24 November 2026: all 95 tests passed with disposable PostgreSQL integration enabled.
 Cloud and local migrations reached `0003`; cloud schema drift check passed. Real cloud HTTP checks
@@ -67,23 +67,42 @@ support assignment, role restrictions, refresh, and logout. No financial payment
 
 ## Phase 3 — Policy retrieval
 
-Start with versioned Markdown policies, chunking, embeddings, pgvector search, and citations.
-Select and validate the embedding model separately from the chat model; freeze its dimensions in schema.
-Add PDF/text ingestion, private storage, processing states, document administration, and retry behavior
-after retrieval quality is established.
+Implemented three hash-pinned Markdown policies with eleven bounded sections, atomic/repeatable
+indexing, pgvector exact cosine candidates with keyword reranking, and authenticated cited retrieval.
+The independently selected and live-tested embedding model is `gemini-embedding-001`; migration
+`0004` freezes 768-dimensional vectors and their embedding space. All fourteen domain tables remain
+backend-only with forced RLS and no client grants/policies. Chat is not used for retrieval or decisions.
 
-Gate: queries retrieve the right source/version; missing or conflicting sources never produce invented policy.
+Responses explicitly distinguish evidence found, missing evidence, and conflicting evidence. Current
+source/version/hash mismatches fail closed; historical/legacy sources are excluded. Customer query
+embedding is opt-in after provider data terms are configured appropriately. Explicit public/synthetic
+CLI commands handle indexing, connectivity testing, search, and repeatable evaluation.
+
+Gate: queries retrieve the right source/version; missing or conflicting sources never produce invented
+policy. See `phase-3-review.md` for the implementation, official model/pricing/terms references,
+measured retrieval results, test evidence, and migration recovery. Phase 3 passed its retrieval gate.
+Add PDF/text uploads, private storage, processing workflows, and document administration only after
+reviewing retrieval quality; they are not implemented here. UI remains deferred.
 
 ## Phase 4 — LangGraph support workflow
 
-Use one orchestrating workflow with specialized nodes/tools. Add Gemini intent classification and grounded
-response generation, PostgreSQL checkpoint memory, explicit confirmation states, streaming, validated
-outputs, internal execution records, and redacted LangSmith traces.
-Retrieve order and policy context concurrently only where independent.
-Do not add autonomous worker agents without measured benefit.
+Implemented one LangGraph with classification, independent context retrieval, explicit actions, and
+validated fact/citation composition. PostgreSQL stores owned JSON checkpoint memory, customer/assistant
+history, safe execution metadata, expiring refund quotes, and turn replay records atomically. Model/text
+consent cannot submit refunds. Explicit confirmed quote actions recheck policy and exact current amounts.
+SSE streams progress and committed, validated responses. Optional LangSmith export sends allowlisted
+metadata only; automatic graph tracing is suppressed. There are no autonomous worker agents.
+
+Migration `0005` adds three tables and execution metadata, bringing the domain count to seventeen.
+Hosted development and local fallback are migrated. Customer workflow and trace export stay opt-in
+until suitable provider terms/credentials are configured; no billing plan or product deployment changed.
 
 Gate: complete order, policy, refund, and escalation flows through the authenticated API across multiple turns.
-Establish measured cost/latency baselines on at least 30 evaluation cases.
+Establish measured cost/latency baselines on at least 30 evaluation cases. The repeatable fixture contains
+36 cases; tests and separate live provider measurements are documented in `phase-4-review.md`.
+Phase 4 is the current review point. UI and deployment require their own requested phases.
+The final live run passed 25/36 cases; eleven were unavailable because of provider/network failures.
+The live reliability gate remains open. LangSmith delivery is unverified without a configured key.
 
 ## Phase 5 — Web application
 

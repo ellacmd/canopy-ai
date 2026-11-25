@@ -73,6 +73,29 @@ def test_gemini_missing_key_fails_without_network(settings):
         GeminiModel(settings)
 
 
+def test_structured_output_pins_schema_and_thinking_and_classifies_safe_errors(settings):
+    from canopy.workflow_contracts import Classification
+
+    client = Mock()
+    client.models.generate_content.return_value = response(text='{"intent":"other"}')
+    model = GeminiModel(settings, client=client)
+    model.generate_structured("synthetic", system="Classify", schema=Classification)
+    config = client.models.generate_content.call_args.kwargs["config"]
+    assert config.response_mime_type == "application/json"
+    assert config.response_json_schema == Classification.model_json_schema()
+    assert str(config.thinking_config.thinking_level).endswith("MINIMAL")
+    client.models.generate_content.return_value = response(reason="MAX_TOKENS")
+    with pytest.raises(ModelUnavailable) as error:
+        model.generate_structured("synthetic", system="Classify", schema=Classification)
+    assert error.value.code == "truncated" and error.value.output_tokens == 8
+    failure = RuntimeError("private-key private-message")
+    failure.code = 429
+    client.models.generate_content.side_effect = failure
+    with pytest.raises(ModelUnavailable) as error:
+        model.generate("synthetic", system="test")
+    assert error.value.code == "rate_limited" and "private" not in str(error.value)
+
+
 def test_real_sdk_client_uses_timeout_and_no_implicit_retries(settings, monkeypatch):
     constructor = Mock()
     monkeypatch.setattr("canopy.llm.genai.Client", constructor)

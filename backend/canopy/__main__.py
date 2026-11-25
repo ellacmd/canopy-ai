@@ -10,10 +10,65 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from canopy.config import Settings
+from canopy.corpus import CorpusInvalid
 from canopy.db import make_engine
+from canopy.embedding import EMBEDDING_SPACE, EmbeddingUnavailable, GeminiEmbedder
 from canopy.llm import GeminiModel, ModelUnavailable
 from canopy.models import Customer
+from canopy.retrieval import IndexConflict, SearchRequest, index_corpus, search_policy
+from canopy.retrieval_eval import evaluate_retrieval
 from canopy.seed import CUSTOMERS, seed_data, seed_id
+
+
+def policy_command(settings: Settings, args) -> int:
+    adapter = engine = None
+    try:
+        adapter = GeminiEmbedder(settings)
+        if args.command == "embedding-smoke":
+            document = adapter.embed(["Amazora standard returns allow 30 days."], task="document")
+            query = adapter.embed(["What is the standard return window?"], task="query")
+            print(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "embedding_space": EMBEDDING_SPACE,
+                        "document_dimensions": len(document[0]),
+                        "query_dimensions": len(query[0]),
+                    }
+                )
+            )
+            return 0
+        if args.command == "policy-search" and not settings.policy_search_enabled:
+            print(
+                "Enable POLICY_SEARCH_ENABLED after reviewing provider data terms.", file=sys.stderr
+            )
+            return 2
+        engine = make_engine(settings)
+        with Session(engine) as db, db.begin():
+            if args.command == "policy-index":
+                result = index_corpus(db, adapter)
+            elif args.command == "policy-evaluate":
+                result = evaluate_retrieval(db, adapter)
+            else:
+                result = search_policy(db, adapter, SearchRequest(query=args.query)).model_dump()
+        print(json.dumps(result, indent=2))
+        return int(args.command == "policy-evaluate" and result["passed"] != result["cases"])
+    except (CorpusInvalid, EmbeddingUnavailable, IndexConflict) as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except ValidationError:
+        print("Invalid policy search input.", file=sys.stderr)
+        return 2
+    except SQLAlchemyError:
+        print(
+            "Policy database command failed. Check the connection and migrations.", file=sys.stderr
+        )
+        return 2
+    finally:
+        if adapter is not None:
+            adapter.close()
+        if engine is not None:
+            engine.dispose()
 
 
 def main() -> int:
@@ -23,6 +78,18 @@ def main() -> int:
         "check-config", help="Show safe configuration status without making requests"
     )
     commands.add_parser("gemini-smoke", help="Make one tiny synthetic Gemini request")
+    workflow_eval = commands.add_parser(
+        "workflow-evaluate", help="Live synthetic workflow evaluation in a dedicated local database"
+    )
+    workflow_eval.add_argument("--interval-seconds", type=float, default=4)
+    workflow_eval.add_argument("--max-attempts", type=int, choices=range(1, 5), default=1)
+    commands.add_parser("embedding-smoke", help="Verify document/query access with synthetic text")
+    commands.add_parser("policy-index", help="Atomically index the approved public Markdown corpus")
+    commands.add_parser(
+        "policy-evaluate", help="Run fixed synthetic retrieval cases (provider calls)"
+    )
+    search = commands.add_parser("policy-search", help="Retrieve cited policy evidence")
+    search.add_argument("--query", required=True)
     seed = commands.add_parser("seed", help="Insert synthetic Amazora records, idempotently")
     seed.add_argument("--as-of", type=date.fromisoformat, default=datetime.now(UTC).date())
     link = commands.add_parser("link-customer", help="Link a demo customer to a Supabase user UUID")
@@ -44,6 +111,10 @@ def main() -> int:
                     "gemini_configured": bool(settings.gemini_api_key.get_secret_value()),
                     "gemini_model": settings.gemini_model,
                     "max_output_tokens": settings.gemini_max_output_tokens,
+                    "embedding_space": EMBEDDING_SPACE,
+                    "policy_search_enabled": settings.policy_search_enabled,
+                    "workflow_enabled": settings.workflow_enabled,
+                    "workflow_tracing_enabled": settings.workflow_tracing_enabled,
                     "note": (
                         "Configuration presence only; this does not verify external connections"
                     ),
@@ -52,6 +123,24 @@ def main() -> int:
             )
         )
         return 0
+    if args.command == "workflow-evaluate":
+        from canopy.workflow_eval import evaluate_workflow
+
+        try:
+            result = evaluate_workflow(
+                settings, interval=args.interval_seconds, max_attempts=args.max_attempts
+            )
+            print(json.dumps(result, indent=2))
+            return int(result["passed"] != result["cases"])
+        except Exception:
+            print(
+                "Workflow evaluation failed. Check the dedicated local evaluation "
+                "database and provider configuration.",
+                file=sys.stderr,
+            )
+            return 2
+    if args.command in {"embedding-smoke", "policy-index", "policy-search", "policy-evaluate"}:
+        return policy_command(settings, args)
     if args.command == "gemini-smoke":
         model = None
         try:

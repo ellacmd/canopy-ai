@@ -55,9 +55,10 @@ uv run --project backend --frozen pip-audit --local --skip-editable
 npm audit --package-lock-only --audit-level=high
 ```
 
-Ordinary tests skip the two PostgreSQL integration checks unless `POSTGRES_TEST_URL` points to a
+Ordinary tests skip PostgreSQL integration checks unless `POSTGRES_TEST_URL` points to a
 dedicated disposable database. CI creates one and runs the full suite on Python 3.12/PostgreSQL 15
-and Python 3.13/PostgreSQL 17. No Supabase/Gemini account or repository secret is required for CI.
+and Python 3.13/PostgreSQL 17 using versioned pgvector images. No Supabase/Gemini account or repository
+secret is required for CI.
 External provider calls are mocked in the test suite. Real cloud verification is a separate explicit step.
 The parked frontend has no application routes yet, so its build/E2E tests are deferred; its dependency
 lockfile is still audited.
