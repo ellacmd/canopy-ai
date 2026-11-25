@@ -112,21 +112,21 @@ usage/latency, incomplete cost estimates, and limitations. LangSmith export has 
 live delivery verification. Implementation-time Phase 4 checks ran locally; consult GitHub CI for
 subsequent repository integration results. No product deployment occurred.
 
-The parked Next.js scaffold has no application routes. No frontend build/E2E gate is active yet.
-Deployment/CD remains Phase 6; hosts, production environment, release artifacts, and rollback need
-to be selected before adding deployment jobs. No CI job migrates the live cloud database.
+Phase 5: the Next.js customer and staff workspaces use same-origin FastAPI routes. Customer
+history restores stored policy citations and any current refund preview. Conversation writes use
+the same idempotency key on retry and show streamed progress until a committed reply arrives.
+Staff can manage tickets and inspect linked customer, order, refund, policy, and execution data.
+Policy administration reports integrity of the approved corpus and its index.
+
+The browser suite in `tests/e2e/` runs both roles against a disposable FastAPI server, with synthetic
+external providers. Its commands are in `CONTRIBUTING.md`. Hosted provider measurements and the
+open reliability gate remain documented in `docs/phase-4-review.md`.
 
 ## Next product phase, when requested
 
-Phase 4 is the current review point. Review workflow/provider measurements in `docs/phase-4-review.md`
-and retrieval limits in `docs/phase-3-review.md` before expanding the corpus or enabling real customer
-messages. Ordinary tests mock providers; separate live evaluations report actual behavior and failures.
-The fixed fixtures are regression cases, not independent holdouts or broad customer accuracy claims.
-
-Phase 5 builds the UI on verified contracts, including explicit quote review/confirmation, same-key
-retries, SSE error handling, scoped history, and coordinated Auth refresh. Phase 6 handles release
-hardening/deployment, shared limits/budgets, and operational retention/recovery. Do not advance phases
-or add uploads/document administration without the owner's request.
+Phase 6 handles release hardening, shared limits and budgets, operational retention/recovery, and
+deployment. Hosts, production environment, release artifacts, and rollback need to be selected
+before adding deployment jobs. No CI job migrates the live cloud database.
 
 ## Important limits and working rules
 
@@ -135,7 +135,7 @@ migrations use the owner. Use verified Auth IDs/app_metadata and ownership filte
 Do not expose auth tokens in JavaScript or let editable metadata grant roles.
 
 The login limiter is process-local; shared rate limiting and enforced usage budgets remain release work.
-Session refresh coordination belongs to the future UI. Logout revokes refresh sessions; issued access
+The UI coordinates refresh across tabs. Logout revokes refresh sessions; issued access
 tokens may remain valid until expiry. Future traces must contain sanitized metadata, not raw customer data.
 
 Never use the shared/cloud database as `POSTGRES_TEST_URL`, reset it, or re-date shared seed records.

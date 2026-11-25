@@ -100,18 +100,20 @@ until suitable provider terms/credentials are configured; no billing plan or pro
 Gate: complete order, policy, refund, and escalation flows through the authenticated API across multiple turns.
 Establish measured cost/latency baselines on at least 30 evaluation cases. The repeatable fixture contains
 36 cases; tests and separate live provider measurements are documented in `phase-4-review.md`.
-Phase 4 is the current review point. UI and deployment require their own requested phases.
+Phase 4 implementation is complete. See the live verification status below.
 The final live run passed 25/36 cases; eleven were unavailable because of provider/network failures.
 The live reliability gate remains open. LangSmith delivery is unverified without a configured key.
 
 ## Phase 5 — Web application
 
-Build customer chat/history, support inbox, customer/order context, refund review, policy administration,
-operations dashboard, and execution timelines on the verified backend contracts.
-Handle session refresh once per browser session at a time to avoid token-rotation races.
-Include accessible keyboard interactions, responsive layouts, and clear success/error/loading states.
+Implemented customer chat, cited history, order context, explicit simulated refund review,
+and escalation. The staff workspace includes ticket assignment and resolution, customer/order
+context, refund review, policy corpus and index inspection, and operations with execution timelines.
+Browser tabs coordinate rotating session refresh with Web Locks.
 
-Gate: both customer and support roles complete their workflows in a real browser against the backend.
+Gate: Playwright covers both roles in Chromium against the real FastAPI routes and a disposable
+SQLite database, with Auth and model providers simulated. The suite joins the required CI checks.
+Phase 4's live provider reliability gate remains open.
 
 ## Phase 6 — Reliability and release
 

@@ -1,7 +1,7 @@
 # Working on Canopy AI
 
 Read `docs/HANDOFF.md`, `docs/plan.md`, and `docs/amazora-rules.md` before implementation.
-The owner requested phased, backend-first work. Phases 1–4 are implemented; UI is paused.
+The owner requested phased, backend-first work. Phases 1–5 are implemented.
 Do not start another phase unless requested. Do not delegate to other agents unless requested.
 
 ## Data and safety boundaries
@@ -38,7 +38,7 @@ uv run --project backend --frozen python scripts/repo_tools.py gitleaks git --re
 PostgreSQL tests require a **dedicated disposable** `POSTGRES_TEST_URL`. Never use the active
 cloud database for that variable. Do not reset the hosted database or regenerate the seed dates.
 Run required checks for the affected code, and report actual results; do not claim GitHub CI ran
-until a remote run has completed. Frontend build/E2E checks are deferred while `src/` is empty.
+until a remote run has completed. Run the frontend build and browser checks in `CONTRIBUTING.md` for web changes.
 
 Use focused Conventional Commits and short-lived branches. Follow `CONTRIBUTING.md` and
 `docs/repository-workflow.md`. Keep lockfiles synchronized. Do not push, publish, deploy, change

@@ -1,5 +1,6 @@
 import json
 from contextlib import closing
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -9,13 +10,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from canopy.auth import Principal, current_customer, current_principal
+from canopy.conversation_views import recent_messages
 from canopy.db import get_db
 from canopy.embedding import EmbeddingUnavailable, GeminiEmbedder
 from canopy.llm import GeminiModel, ModelUnavailable
-from canopy.models import AgentExecution, Conversation, Customer, Message
+from canopy.models import AgentExecution, Conversation, Customer, Message, RefundQuote
+from canopy.policy import POLICY_VERSION
 from canopy.support_api import IdempotencyKey
-from canopy.workflow import SupportWorkflow, owned_conversation
-from canopy.workflow_contracts import TurnInput, TurnResult
+from canopy.workflow import SupportWorkflow, owned_conversation, quote_view
+from canopy.workflow_contracts import QuoteView, TurnInput, TurnResult
 
 router = APIRouter(prefix="/api/conversations", tags=["support workflow"])
 
@@ -104,6 +107,42 @@ def messages(
     return [
         {"id": m.id, "role": m.role, "content": m.content, "created_at": m.created_at} for m in rows
     ]
+
+
+@router.get("/{conversation_id}/history")
+def recent_history(
+    conversation_id: UUID,
+    limit: int = Query(40, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=10000),
+    customer: Customer = Depends(current_customer),
+    db: Session = Depends(get_db),
+):
+    owned_conversation(db, conversation_id, customer.id)
+    return recent_messages(db, conversation_id, limit=limit, offset=offset)
+
+
+@router.get("/{conversation_id}/quote", response_model=QuoteView | None)
+def active_quote(
+    conversation_id: UUID,
+    customer: Customer = Depends(current_customer),
+    db: Session = Depends(get_db),
+):
+    conversation = owned_conversation(db, conversation_id, customer.id)
+    if conversation.status == "closed":
+        return None
+    quote = db.scalar(
+        select(RefundQuote)
+        .where(
+            RefundQuote.conversation_id == conversation_id,
+            RefundQuote.customer_id == customer.id,
+            RefundQuote.status == "pending",
+            RefundQuote.policy_version == POLICY_VERSION,
+            RefundQuote.expires_at > datetime.now(UTC),
+        )
+        .order_by(RefundQuote.created_at.desc(), RefundQuote.id)
+        .limit(1)
+    )
+    return quote_view(quote) if quote else None
 
 
 @router.get("/{conversation_id}/executions")

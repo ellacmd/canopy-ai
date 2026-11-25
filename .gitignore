@@ -34,3 +34,5 @@ supabase/.temp/
 supabase/.branches/
 supabase/.env
 supabase/cloud.json
+
+next-env.d.ts
