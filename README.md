@@ -229,7 +229,7 @@ The PostgreSQL integration test runs only when `POSTGRES_TEST_URL` points to a *
 database. The tests create roles, migrate, seed, and verify runtime roles, RLS, client denial,
 concurrent refund retries/reservations, and composite ownership constraints.
 Never set that variable to a shared or production database. GitHub Actions provisions an isolated PostgreSQL
-service with pgvector and runs these checks. The updated Phase 3 workflow has not been run remotely.
+service with pgvector and runs these checks. Consult GitHub Actions for current workflow results.
 The local setup command separately verifies real local Supabase authentication, refresh/logout,
 cross-customer denial, role restrictions, direct REST database denial, and forced PostgreSQL RLS.
 Phase 2 verification includes the full suite against a fresh disposable PostgreSQL database; see

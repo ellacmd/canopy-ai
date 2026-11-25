@@ -98,7 +98,8 @@ compatibility. The live hosted evaluation passed **34/34** (26 expected source/v
 8 unsupported-query abstentions). The suite was used during tuning; it is not an independent holdout.
 Saved details: `docs/evaluations/phase-3-retrieval.json`. Hosted schema drift, synthetic customer/support
 Auth plus policy API, local process health/readiness, and repeatable indexing were checked separately.
-See the Phase 3 review for final quality/security/build checks. No Phase 3 push or remote CI run occurred.
+See the Phase 3 review for implementation-time quality/security/build checks, which ran locally.
+Consult GitHub CI for subsequent repository integration results.
 
 Phase 4 verification: **157 tests passed** with actual disposable PostgreSQL/pgvector. Hosted schema
 drift, seventeen forced-RLS tables, new-table client denial, local process readiness, real Auth/SSE,
@@ -108,7 +109,8 @@ The final live evaluation attempted **36 cases: 25 passed, 11 unavailable** afte
 evaluation retries, because of provider/network errors/timeouts. This is not a passing reliability gate.
 The unfiltered report is `docs/evaluations/phase-4-workflow.json`; see `docs/phase-4-review.md` for measured
 usage/latency, incomplete cost estimates, and limitations. LangSmith export has unit coverage but no
-live delivery verification. No Phase 4 push, product deployment, or remote CI run occurred.
+live delivery verification. Implementation-time Phase 4 checks ran locally; consult GitHub CI for
+subsequent repository integration results. No product deployment occurred.
 
 The parked Next.js scaffold has no application routes. No frontend build/E2E gate is active yet.
 Deployment/CD remains Phase 6; hosts, production environment, release artifacts, and rollback need
