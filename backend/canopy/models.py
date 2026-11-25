@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     CheckConstraint,
@@ -182,11 +183,40 @@ class RefundLine(Record, Base):
 
 class PolicyDocument(Record, Base):
     __tablename__ = "policy_documents"
+    __table_args__ = (UniqueConstraint("source_key", "version"),)
     title: Mapped[str] = mapped_column(String(200))
     category: Mapped[str] = mapped_column(String(60))
     version: Mapped[str] = mapped_column(String(40))
     storage_path: Mapped[str] = mapped_column(Text)
     index_status: Mapped[str] = mapped_column(String(30), default="pending")
+    # Nullable for pre-Phase-3 documents, which are never usable retrieval evidence.
+    source_key: Mapped[str | None] = mapped_column(String(60))
+    content_sha256: Mapped[str | None] = mapped_column(String(64))
+    rules_version: Mapped[str | None] = mapped_column(String(40))
+    embedding_space: Mapped[str | None] = mapped_column(String(100))
+    chunker_version: Mapped[str | None] = mapped_column(String(40))
+
+
+class PolicyChunk(Record, Base):
+    __tablename__ = "policy_chunks"
+    __table_args__ = (
+        UniqueConstraint("document_id", "ordinal"),
+        CheckConstraint("ordinal >= 0", name="ordinal"),
+        # Freeze the model and dimensions independently of mutable application constants.
+        CheckConstraint(
+            "embedding_space = 'gemini-embedding-001:768:unit-v1'", name="embedding_space"
+        ),
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        ForeignKey("policy_documents.id", ondelete="CASCADE"), index=True
+    )
+    ordinal: Mapped[int]
+    anchor: Mapped[str] = mapped_column(String(200))
+    heading: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    content_sha256: Mapped[str] = mapped_column(String(64))
+    embedding_space: Mapped[str] = mapped_column(String(100))
+    embedding: Mapped[list[float]] = mapped_column(Vector(768).with_variant(JSON(), "sqlite"))
 
 
 class Escalation(Record, Base):
@@ -245,3 +275,54 @@ class AgentExecution(Record, Base):
     input_tokens: Mapped[int]
     output_tokens: Mapped[int]
     estimated_cost: Mapped[Decimal] = mapped_column(Numeric(12, 8))
+    details: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+
+
+class WorkflowCheckpoint(Record, Base):
+    __tablename__ = "workflow_checkpoints"
+    __table_args__ = (
+        UniqueConstraint("conversation_id"),
+        ForeignKeyConstraint(
+            ["conversation_id", "customer_id"], ["conversations.id", "conversations.customer_id"]
+        ),
+    )
+    conversation_id: Mapped[UUID] = mapped_column(Uuid)
+    customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+
+
+class WorkflowTurn(Record, Base):
+    __tablename__ = "workflow_turns"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "idempotency_key"),
+        ForeignKeyConstraint(
+            ["conversation_id", "customer_id"], ["conversations.id", "conversations.customer_id"]
+        ),
+    )
+    conversation_id: Mapped[UUID] = mapped_column(Uuid)
+    customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    idempotency_key: Mapped[str] = mapped_column(String(100))
+    request_fingerprint: Mapped[str] = mapped_column(String(64))
+    response: Mapped[dict] = mapped_column(JSON)
+
+
+class RefundQuote(Record, Base):
+    __tablename__ = "refund_quotes"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["conversation_id", "customer_id"], ["conversations.id", "conversations.customer_id"]
+        ),
+        ForeignKeyConstraint(["order_id", "customer_id"], ["orders.id", "orders.customer_id"]),
+        CheckConstraint("status IN ('pending','consumed','cancelled')", name="status"),
+        CheckConstraint("amount > 0", name="amount"),
+    )
+    conversation_id: Mapped[UUID] = mapped_column(Uuid, index=True)
+    customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    order_id: Mapped[UUID] = mapped_column(Uuid)
+    selection: Mapped[dict] = mapped_column(JSON)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3))
+    policy_version: Mapped[str] = mapped_column(String(40))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    refund_request_id: Mapped[UUID | None] = mapped_column(ForeignKey("refund_requests.id"))

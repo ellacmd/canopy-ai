@@ -1,0 +1,24 @@
+{
+  "rules_version": "amazora-returns-v1.0",
+  "chunker_version": "markdown-sections-v1",
+  "sources": [
+    {
+      "key": "returns",
+      "file": "returns-v1.0.md",
+      "version": "1.0",
+      "sha256": "91447c6c80f2b00ded3b6174ea4f65fb85096f58399eae3d1af2ad4fe5e1ada7"
+    },
+    {
+      "key": "amounts",
+      "file": "amounts-v1.0.md",
+      "version": "1.0",
+      "sha256": "e45b42bac3282252263d7eafc81240f43e0099d3e03ab5858a6409e547c47aa2"
+    },
+    {
+      "key": "submission",
+      "file": "submission-v1.0.md",
+      "version": "1.0",
+      "sha256": "7b2e4133659d453edc082312a194fe001e67830ce244475b0748c04bfda94651"
+    }
+  ]
+}

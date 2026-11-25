@@ -1,17 +1,9 @@
 # Handoff for the next development session
 
-Updated 24 November 2026. Read this file, `AGENTS.md`, and `docs/plan.md` before changing code.
+Updated 25 November 2026. Read this file, `AGENTS.md`, and `docs/plan.md` before changing code.
 Machine-specific notes are in ignored `.local/HANDOFF.md` on the maintainer's machine. Public clones
 must configure their own services. Never print secret configuration to reconstruct context.
 
-## Owner's decisions
-
-- Build in phases and review each completed phase. Backend comes first; UI is paused.
-- Use Gemini initially, with `gemini-3.5-flash-lite`; the server adapter and live connectivity are verified.
-- Amazora policy rules were accepted; current deterministic version is `amazora-returns-v1.0`.
-- Publish a new public GitHub repository under `ellacmd`, using proper commits and CI checks.
-- License decision is deferred. Do not add an open-source license without the owner's choice.
-- The current request is repository setup and handoff, not implementation of Phase 3.
 
 ## Completed product work
 
@@ -23,8 +15,44 @@ infrastructure and a local Docker fallback exist. The product frontend/backend a
 Phase 2: order-number lookup/tracking; pure deterministic item-level eligibility; explicit confirmation;
 simulated refund submission/status; customer-scoped idempotency; atomic quantity/value reservations;
 refund lines and audit events; customer escalation; support/admin ticket assignment/status and refund
-review. Migration head is `0003`, with thirteen domain tables. Cloud and local fallback are migrated.
+review. Phase 2 reached migration `0003`, with thirteen domain tables.
 See `docs/phase-2-review.md` for an API walkthrough and live cloud verification results.
+
+Phase 3: three approved versioned Markdown sources, eleven intact chunks, a hash-pinned packaged
+manifest, independent Gemini embeddings, atomic/repeatable indexing, pgvector cosine search with
+keyword reranking, and authenticated policy evidence with source/version/hash citations. Migration
+head was `0004`, with fourteen domain tables; hosted development and the local fallback were migrated
+and indexed.
+See `docs/phase-3-review.md` for setup, model references, evaluation, boundaries, and recovery.
+
+Embedding space is frozen as `gemini-embedding-001:768:unit-v1`; source rules remain
+`amazora-returns-v1.0`. Missing or conflicting evidence yields no citations and explicitly requires
+human review. Retrieved excerpts do not decide eligibility or authorize refunds. Legacy/historical
+documents are excluded from current evidence. Source/version edits are immutable; explicit rerun
+can repair missing chunks from the approved corpus. No arbitrary uploads or document admin were added.
+
+Customer query embedding defaults to disabled (`POLICY_SEARCH_ENABLED=false`) until appropriate
+provider data terms are configured. No billing plan was changed. Public/synthetic `embedding-smoke`,
+`policy-index`, and `policy-evaluate` commands work without that flag. Real Auth/API verification used
+synthetic queries with a temporary in-process opt-in; active settings remain unchanged.
+
+Phase 4: one LangGraph coordinates Gemini structured intent classification, independent order/policy
+retrieval, deterministic actions, and constrained fact/citation composition. Owned JSON checkpoint
+memory, conversation history, explicit expiring refund quotes, turn replay, progress/validated SSE,
+safe execution usage/cost metadata, and optional metadata-only LangSmith export are implemented.
+Current migration head is `0005`, with seventeen domain tables; hosted development and local fallback
+are migrated. The local backend runs Phase 4 routes. See `docs/phase-4-review.md` for contracts and limits.
+
+Messages cannot authorize refunds. A separate explicit action must confirm a specific active owned quote,
+current policy version, exact current amount, and quantities within 15 minutes. New instructions can
+invalidate a preview; same-key turn retries replay committed results. The checkpoint, quote consumption,
+messages, execution, replay result, refund/reservations, and audit commit atomically. Persistence is at
+turn boundaries, not mid-node resume/time travel. Changed provider settings/models require evaluation.
+
+`WORKFLOW_ENABLED` defaults to false until appropriate provider data terms are configured. No billing
+plan changed. Automatic graph tracing is always suppressed. `WORKFLOW_TRACING_ENABLED` plus a
+backend-only LangSmith key enables manual allowlisted metadata export; no key was configured, so
+external delivery has not been live-verified. Internal trace IDs do not prove external delivery.
 
 Refunds are always simulated and submitted. There is no payment integration, approval/completion,
 rejection, or reservation-release endpoint. The model cannot authorize a refund. Whole item quantities
@@ -44,6 +72,8 @@ Read `docs/amazora-rules.md` rather than inventing policy details.
 | Business operations | `backend/canopy/tools.py`, `policy.py`, `contracts.py` |
 | Data and migrations | `backend/canopy/models.py`, `db.py`, `backend/migrations/` |
 | Provider and setup | `backend/canopy/llm.py`, `local_setup.py`, `seed.py`, `__main__.py` |
+| Policy evidence | `backend/canopy/corpus/`, `corpus.py`, `embedding.py`, `retrieval.py`, `policy_api.py`, `retrieval_eval.py` |
+| Support graph | `backend/canopy/workflow.py`, `workflow_api.py`, `workflow_contracts.py`, `checkpoints.py`, `workflow_traces.py`, `workflow_eval.py`, `evaluations/` |
 | Verification | `backend/tests/`, `.github/workflows/ci.yml` |
 | Public-repo tooling | `.githooks/`, `scripts/`, `.github/dependabot.yml` |
 | Plans and policy | `docs/plan.md`, `architecture.md`, `amazora-rules.md` |
@@ -62,24 +92,41 @@ PostgreSQL integration. Lint, format, actionlint, staged secret scan, Python/npm
 also passed. Consult the latest GitHub CI run for remote results.
 Real cloud workflow checks passed separately. Do not confuse mocked provider tests with live checks.
 
+Phase 3 verification: **131 tests passed** with actual disposable PostgreSQL/pgvector, including
+concurrent indexing, vectors, RLS, migration reversal, schema drift, and Supabase extension-schema
+compatibility. The live hosted evaluation passed **34/34** (26 expected source/version retrievals and
+8 unsupported-query abstentions). The suite was used during tuning; it is not an independent holdout.
+Saved details: `docs/evaluations/phase-3-retrieval.json`. Hosted schema drift, synthetic customer/support
+Auth plus policy API, local process health/readiness, and repeatable indexing were checked separately.
+See the Phase 3 review for implementation-time quality/security/build checks, which ran locally.
+Consult GitHub CI for subsequent repository integration results.
+
+Phase 4 verification: **157 tests passed** with actual disposable PostgreSQL/pgvector. Hosted schema
+drift, seventeen forced-RLS tables, new-table client denial, local process readiness, real Auth/SSE,
+preview/cancel/confirmed simulated submission/replay, customer isolation, and support ticket management
+passed. A new synthetic cloud review order was added; original shared seed records/dates were preserved.
+The final live evaluation attempted **36 cases: 25 passed, 11 unavailable** after bounded explicit
+evaluation retries, because of provider/network errors/timeouts. This is not a passing reliability gate.
+The unfiltered report is `docs/evaluations/phase-4-workflow.json`; see `docs/phase-4-review.md` for measured
+usage/latency, incomplete cost estimates, and limitations. LangSmith export has unit coverage but no
+live delivery verification. Implementation-time Phase 4 checks ran locally; consult GitHub CI for
+subsequent repository integration results. No product deployment occurred.
+
 The parked Next.js scaffold has no application routes. No frontend build/E2E gate is active yet.
 Deployment/CD remains Phase 6; hosts, production environment, release artifacts, and rollback need
 to be selected before adding deployment jobs. No CI job migrates the live cloud database.
 
 ## Next product phase, when requested
 
-Phase 3 is policy retrieval with citations:
+Phase 4 is the current review point. Review workflow/provider measurements in `docs/phase-4-review.md`
+and retrieval limits in `docs/phase-3-review.md` before expanding the corpus or enabling real customer
+messages. Ordinary tests mock providers; separate live evaluations report actual behavior and failures.
+The fixed fixtures are regression cases, not independent holdouts or broad customer accuracy claims.
 
-1. Define a small versioned Markdown corpus consistent with the approved deterministic rules.
-2. Choose an affordable embedding model separately from chat; verify current pricing, model access,
-   dimensions, and terms using official documentation. Freeze dimensions/version in schema.
-3. Add pgvector schema/migrations, ingestion/chunking, repeatable indexing, and backend-only search.
-4. Return source/version citations and explicit missing/conflicting-evidence behavior.
-5. Evaluate retrieval on repeatable queries before adding PDF ingestion or more document management.
-
-Phase 4 adds LangGraph orchestration, Gemini intent/grounded responses, checkpoint memory, explicit
-confirmation state, streaming, and sanitized traces. Establish measured cost/latency and at least 30
-evaluation cases. Phase 5 builds the UI on verified contracts. Phase 6 handles release hardening/deployment.
+Phase 5 builds the UI on verified contracts, including explicit quote review/confirmation, same-key
+retries, SSE error handling, scoped history, and coordinated Auth refresh. Phase 6 handles release
+hardening/deployment, shared limits/budgets, and operational retention/recovery. Do not advance phases
+or add uploads/document administration without the owner's request.
 
 ## Important limits and working rules
 

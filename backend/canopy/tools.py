@@ -42,11 +42,12 @@ def fingerprint(body) -> str:
 
 
 class SupportTools:
-    def __init__(self, db: Session, *, customer_id: UUID, actor_user_id: UUID):
+    def __init__(self, db: Session, *, customer_id: UUID, actor_user_id: UUID, commit: bool = True):
         # Both identifiers come from backend authentication, never model/customer payloads.
         self.db = db
         self.customer_id = customer_id
         self.actor_user_id = actor_user_id
+        self.commit = commit
 
     def get_customer_orders(self, *, limit=20, offset=0):
         return self.db.scalars(
@@ -254,7 +255,8 @@ class SupportTools:
             )
             self.db.flush()
             result = self._refund_view(record)
-            self.db.commit()
+            if self.commit:
+                self.db.commit()
             return result
         except (IntegrityError, HTTPException) as error:
             self.db.rollback()
@@ -340,7 +342,8 @@ class SupportTools:
             self.db.flush()
             self._audit("escalation_created", record, {"reason": body.reason})
             result = EscalationView.model_validate(record)
-            self.db.commit()
+            if self.commit:
+                self.db.commit()
             return result
         except (IntegrityError, HTTPException) as error:
             self.db.rollback()

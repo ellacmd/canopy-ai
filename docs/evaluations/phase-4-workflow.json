@@ -1,0 +1,1230 @@
+{
+  "model": "gemini-3.5-flash-lite",
+  "pricing_version": "google-standard-2026-11-25",
+  "cases": 36,
+  "maximum_turn_attempts": 4,
+  "minimum_seconds_between_model_calls": 6.0,
+  "passed": 25,
+  "cost_scope": "Chat only; embeddings and failed unreported provider usage excluded",
+  "results": [
+    {
+      "id": "orders-list",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 45962.9,
+      "latency_ms": [
+        28366,
+        7570
+      ],
+      "input_tokens": 623,
+      "output_tokens": 124,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_504"
+      ],
+      "observed": [
+        {
+          "intent": "orders",
+          "state": "ready",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        31789.9
+      ],
+      "provider_latency_ms": [
+        8403.9,
+        19921.0,
+        1830.2,
+        1541.0
+      ],
+      "estimated_chat_cost_usd": "0.00049690"
+    },
+    {
+      "id": "order-status",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 11800.4,
+      "latency_ms": [
+        11787
+      ],
+      "input_tokens": 309,
+      "output_tokens": 68,
+      "model_calls": 2,
+      "embedding_calls": 0,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "order_status",
+          "state": "ready",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        2688.0
+      ],
+      "provider_latency_ms": [
+        1266.6,
+        1340.6
+      ],
+      "estimated_chat_cost_usd": "0.00026270"
+    },
+    {
+      "id": "order-payment",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 33720.5,
+      "latency_ms": [
+        5878,
+        1039,
+        6771
+      ],
+      "input_tokens": 349,
+      "output_tokens": 68,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503",
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "order_status",
+          "state": "ready",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        4585.7
+      ],
+      "provider_latency_ms": [
+        1231.6,
+        1007.1,
+        1480.2,
+        740.3
+      ],
+      "estimated_chat_cost_usd": "0.00027470"
+    },
+    {
+      "id": "order-tracking",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 12178.7,
+      "latency_ms": [
+        12162
+      ],
+      "input_tokens": 338,
+      "output_tokens": 71,
+      "model_calls": 2,
+      "embedding_calls": 0,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "tracking",
+          "state": "ready",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        2471.5
+      ],
+      "provider_latency_ms": [
+        1515.5,
+        910.1
+      ],
+      "estimated_chat_cost_usd": "0.00027890"
+    },
+    {
+      "id": "order-delivered",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 13014.9,
+      "latency_ms": [
+        13002
+      ],
+      "input_tokens": 344,
+      "output_tokens": 71,
+      "model_calls": 2,
+      "embedding_calls": 0,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "tracking",
+          "state": "ready",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        2967.2
+      ],
+      "provider_latency_ms": [
+        999.1,
+        1924.9
+      ],
+      "estimated_chat_cost_usd": "0.00028070"
+    },
+    {
+      "id": "order-foreign",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 4885.3,
+      "latency_ms": [
+        4858
+      ],
+      "input_tokens": 198,
+      "output_tokens": 37,
+      "model_calls": 1,
+      "embedding_calls": 0,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "order_status",
+          "state": "needs_information",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        841.8
+      ],
+      "provider_latency_ms": [
+        759.7
+      ],
+      "estimated_chat_cost_usd": "0.00015190"
+    },
+    {
+      "id": "order-missing-number",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 17777.4,
+      "latency_ms": [
+        6609,
+        1134
+      ],
+      "input_tokens": 212,
+      "output_tokens": 28,
+      "model_calls": 2,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "tracking",
+          "state": "needs_information",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        2629.9
+      ],
+      "provider_latency_ms": [
+        1435.7,
+        1101.1
+      ],
+      "estimated_chat_cost_usd": "0.00013360"
+    },
+    {
+      "id": "tracking-memory",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 34925.2,
+      "latency_ms": [
+        5612,
+        6930,
+        12342
+      ],
+      "input_tokens": 791,
+      "output_tokens": 129,
+      "model_calls": 5,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "tracking",
+          "state": "ready",
+          "citation_count": 0
+        },
+        {
+          "intent": "tracking",
+          "state": "ready",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        3319.2,
+        2644.3
+      ],
+      "provider_latency_ms": [
+        723.5,
+        1615.7,
+        903.2,
+        1351.7,
+        1235.9
+      ],
+      "estimated_chat_cost_usd": "0.00055980"
+    },
+    {
+      "id": "policy-window",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 42645.3,
+      "latency_ms": [
+        9739,
+        5844,
+        7013
+      ],
+      "input_tokens": 584,
+      "output_tokens": 86,
+      "model_calls": 4,
+      "embedding_calls": 1,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503",
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        14998.5
+      ],
+      "provider_latency_ms": [
+        1091.0,
+        9709.6,
+        2285.4,
+        974.0
+      ],
+      "estimated_chat_cost_usd": "0.00039020"
+    },
+    {
+      "id": "policy-day30",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 11712.7,
+      "latency_ms": [
+        11694
+      ],
+      "input_tokens": 560,
+      "output_tokens": 71,
+      "model_calls": 2,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        2554.1
+      ],
+      "provider_latency_ms": [
+        1129.2,
+        680.9
+      ],
+      "estimated_chat_cost_usd": "0.00034550"
+    },
+    {
+      "id": "policy-gift",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 12429.4,
+      "latency_ms": [
+        12411
+      ],
+      "input_tokens": 549,
+      "output_tokens": 73,
+      "model_calls": 2,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        4008.1
+      ],
+      "provider_latency_ms": [
+        2179.4,
+        1102.4
+      ],
+      "estimated_chat_cost_usd": "0.00034720"
+    },
+    {
+      "id": "policy-damage",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 29019.6,
+      "latency_ms": [
+        12137,
+        6851
+      ],
+      "input_tokens": 772,
+      "output_tokens": 103,
+      "model_calls": 4,
+      "embedding_calls": 2,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        5401.2
+      ],
+      "provider_latency_ms": [
+        791.5,
+        1245.3,
+        1083.2,
+        812.4
+      ],
+      "estimated_chat_cost_usd": "0.00048910"
+    },
+    {
+      "id": "policy-wrong",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 12038.7,
+      "latency_ms": [
+        12025
+      ],
+      "input_tokens": 543,
+      "output_tokens": 74,
+      "model_calls": 2,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        2668.9
+      ],
+      "provider_latency_ms": [
+        1055.7,
+        846.2
+      ],
+      "estimated_chat_cost_usd": "0.00034790"
+    },
+    {
+      "id": "policy-currency",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 12048.1,
+      "latency_ms": [
+        12031
+      ],
+      "input_tokens": 573,
+      "output_tokens": 70,
+      "model_calls": 2,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        3158.5
+      ],
+      "provider_latency_ms": [
+        1546.1,
+        877.3
+      ],
+      "estimated_chat_cost_usd": "0.00034690"
+    },
+    {
+      "id": "policy-allocations",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 12038.6,
+      "latency_ms": [
+        12024
+      ],
+      "input_tokens": 605,
+      "output_tokens": 65,
+      "model_calls": 2,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        2928.0
+      ],
+      "provider_latency_ms": [
+        1279.8,
+        920.1
+      ],
+      "estimated_chat_cost_usd": "0.00034400"
+    },
+    {
+      "id": "policy-partial",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 23265.9,
+      "latency_ms": [
+        6293,
+        6942
+      ],
+      "input_tokens": 613,
+      "output_tokens": 73,
+      "model_calls": 3,
+      "embedding_calls": 1,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        4147.9
+      ],
+      "provider_latency_ms": [
+        1220.0,
+        1227.6,
+        902.3
+      ],
+      "estimated_chat_cost_usd": "0.00036640"
+    },
+    {
+      "id": "policy-confirmation",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 53871.5,
+      "latency_ms": [
+        6159,
+        7049,
+        20623
+      ],
+      "input_tokens": 868,
+      "output_tokens": 97,
+      "model_calls": 5,
+      "embedding_calls": 2,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503",
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        24729.4
+      ],
+      "provider_latency_ms": [
+        1074.5,
+        1121.2,
+        1011.7,
+        18999.7,
+        749.6
+      ],
+      "estimated_chat_cost_usd": "0.00050290"
+    },
+    {
+      "id": "policy-simulation",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 12474.1,
+      "latency_ms": [
+        12442
+      ],
+      "input_tokens": 592,
+      "output_tokens": 76,
+      "model_calls": 2,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 3
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        3665.7
+      ],
+      "provider_latency_ms": [
+        1236.1,
+        1206.7
+      ],
+      "estimated_chat_cost_usd": "0.00036760"
+    },
+    {
+      "id": "policy-duplicate",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 68323.7,
+      "latency_ms": [
+        11903,
+        4149,
+        1821,
+        20368
+      ],
+      "input_tokens": 198,
+      "output_tokens": 35,
+      "model_calls": 5,
+      "embedding_calls": 1,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503",
+        "provider_http_503",
+        "provider_http_503",
+        "provider_ReadTimeout"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        29518.3
+      ],
+      "provider_latency_ms": [
+        888.5,
+        1143.3,
+        1793.6,
+        4027.3,
+        20291.4
+      ],
+      "estimated_chat_cost_usd": "0.00014690"
+    },
+    {
+      "id": "policy-shipping",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 40489.9,
+      "latency_ms": [
+        12903,
+        17534
+      ],
+      "input_tokens": 606,
+      "output_tokens": 102,
+      "model_calls": 4,
+      "embedding_calls": 2,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "policy",
+          "state": "ready",
+          "citation_count": 1
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        26319.3
+      ],
+      "provider_latency_ms": [
+        1119.9,
+        6869.3,
+        10531.9,
+        4648.9
+      ],
+      "estimated_chat_cost_usd": "0.00043680"
+    },
+    {
+      "id": "refund-request",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 28012.5,
+      "latency_ms": [
+        3106,
+        14832
+      ],
+      "input_tokens": 220,
+      "output_tokens": 35,
+      "model_calls": 2,
+      "embedding_calls": 1,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "refund",
+          "state": "needs_information",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        16800.9
+      ],
+      "provider_latency_ms": [
+        1811.7,
+        4335.7
+      ],
+      "estimated_chat_cost_usd": "0.00015350"
+    },
+    {
+      "id": "refund-request2",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 75806.9,
+      "latency_ms": [
+        11121,
+        12043,
+        22553,
+        35
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectTimeout",
+        "provider_ConnectError"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        45781.2
+      ],
+      "provider_latency_ms": [
+        11090.0,
+        12008.9,
+        22522.8,
+        4.7
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "refund-selection",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 36140.2,
+      "latency_ms": [
+        5995,
+        28,
+        33,
+        33
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        156.4
+      ],
+      "provider_latency_ms": [
+        5.4,
+        2.3,
+        2.3,
+        2.6
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "refund-partial",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 36158.7,
+      "latency_ms": [
+        5999,
+        33,
+        31,
+        39
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        169.1
+      ],
+      "provider_latency_ms": [
+        6.8,
+        2.5,
+        2.9,
+        3.3
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "human-person",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 36119.4,
+      "latency_ms": [
+        5982,
+        34,
+        32,
+        27
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        160.3
+      ],
+      "provider_latency_ms": [
+        3.8,
+        2.7,
+        2.4,
+        2.3
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "human-agent",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 36138.3,
+      "latency_ms": [
+        5994,
+        34,
+        33,
+        32
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        159.4
+      ],
+      "provider_latency_ms": [
+        4.3,
+        5.6,
+        2.2,
+        2.3
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "human-explicit",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 36134.2,
+      "latency_ms": [
+        5991,
+        29,
+        38,
+        30
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        155.9
+      ],
+      "provider_latency_ms": [
+        5.1,
+        2.7,
+        3.5,
+        2.3
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "unsupported-weather",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 36127.4,
+      "latency_ms": [
+        5993,
+        28,
+        32,
+        32
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        152.9
+      ],
+      "provider_latency_ms": [
+        4.5,
+        2.3,
+        3.0,
+        2.4
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "unsupported-code",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 36122.7,
+      "latency_ms": [
+        5991,
+        31,
+        27,
+        32
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        148.0
+      ],
+      "provider_latency_ms": [
+        3.4,
+        2.3,
+        2.3,
+        2.4
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "injection-secret",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 56651.8,
+      "latency_ms": [
+        5993,
+        29,
+        46,
+        20535
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_ConnectError",
+        "provider_http_504"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        20674.5
+      ],
+      "provider_latency_ms": [
+        4.8,
+        2.6,
+        4.7,
+        20444.6
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "unsupported-bank",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 92644.8,
+      "latency_ms": [
+        1895,
+        20035,
+        23998,
+        16657
+      ],
+      "input_tokens": 253,
+      "output_tokens": 28,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_ReadTimeout",
+        "provider_ReadTimeout",
+        "provider_http_503"
+      ],
+      "observed": [
+        {
+          "intent": "other",
+          "state": "needs_information",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        62636.6
+      ],
+      "provider_latency_ms": [
+        20005.6,
+        23968.8,
+        16627.4,
+        1850.2
+      ],
+      "estimated_chat_cost_usd": "0.00014590"
+    },
+    {
+      "id": "unsupported-travel",
+      "passed": false,
+      "error": "workflow_unavailable",
+      "elapsed_ms_including_interval": 111685.9,
+      "latency_ms": [
+        23949,
+        25772,
+        10498,
+        21416
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 4,
+      "embedding_calls": 0,
+      "usage_complete": false,
+      "error_codes": [
+        "provider_http_504",
+        "provider_ReadTimeout",
+        "provider_ConnectError",
+        "provider_ReadTimeout"
+      ],
+      "observed": [],
+      "latency_ms_excluding_pacing": [
+        77583.6
+      ],
+      "provider_latency_ms": [
+        19832.6,
+        25734.1,
+        10469.6,
+        21384.9
+      ],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "confirmed-refund-flow",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 3682.4,
+      "latency_ms": [
+        3542,
+        87
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 0,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "refund",
+          "state": "awaiting_confirmation",
+          "citation_count": 3
+        },
+        {
+          "intent": "confirmation",
+          "state": "submitted",
+          "citation_count": 0
+        },
+        {
+          "intent": "confirmation",
+          "state": "submitted",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        3552.0,
+        93.8,
+        6.2
+      ],
+      "provider_latency_ms": [],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "cancelled-refund-flow",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 550.3,
+      "latency_ms": [
+        28,
+        462,
+        27
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 0,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "refund",
+          "state": "awaiting_confirmation",
+          "citation_count": 3
+        },
+        {
+          "intent": "confirmation",
+          "state": "cancelled",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        468.4,
+        34.3,
+        33.2
+      ],
+      "provider_latency_ms": [],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "exception-human-flow",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 548.0,
+      "latency_ms": [
+        46,
+        475
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "model_calls": 0,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "refund",
+          "state": "needs_human_review",
+          "citation_count": 3
+        },
+        {
+          "intent": "human",
+          "state": "escalated",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        482.1,
+        52.8
+      ],
+      "provider_latency_ms": [],
+      "estimated_chat_cost_usd": "0E-8"
+    },
+    {
+      "id": "chat-consent-flow",
+      "passed": true,
+      "error": null,
+      "elapsed_ms_including_interval": 2543.8,
+      "latency_ms": [
+        2039,
+        474
+      ],
+      "input_tokens": 364,
+      "output_tokens": 35,
+      "model_calls": 1,
+      "embedding_calls": 1,
+      "usage_complete": true,
+      "error_codes": [],
+      "observed": [
+        {
+          "intent": "refund",
+          "state": "awaiting_confirmation",
+          "citation_count": 3
+        },
+        {
+          "intent": "confirmation",
+          "state": "awaiting_confirmation",
+          "citation_count": 0
+        }
+      ],
+      "latency_ms_excluding_pacing": [
+        484.7,
+        2045.7
+      ],
+      "provider_latency_ms": [
+        1994.6
+      ],
+      "estimated_chat_cost_usd": "0.00019670"
+    }
+  ]
+}

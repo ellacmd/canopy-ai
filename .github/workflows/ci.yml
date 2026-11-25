@@ -55,7 +55,7 @@ jobs:
             postgres: "17"
     services:
       postgres:
-        image: postgres:${{ matrix.postgres }}
+        image: pgvector/pgvector:0.8.2-pg${{ matrix.postgres }}
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: canopy_test_only

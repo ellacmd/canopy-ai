@@ -1,4 +1,4 @@
-# Backend architecture — Phases 1–2
+# Backend architecture — Phases 1–4
 
 ```mermaid
 flowchart LR
@@ -7,6 +7,15 @@ flowchart LR
     A -->|Verified identity and ownership filter| D[(PostgreSQL)]
     C[Explicit CLI smoke test] --> L[Gemini adapter]
     L --> G[Gemini API]
+    A -->|Authenticated policy evidence search, opt in| R[Retrieval service]
+    R -->|Current approved corpus only| D
+    R --> E[Gemini embedding adapter]
+    E --> G
+    I[Explicit index / evaluation CLI] --> R
+    A -->|Verified customer, owned conversation| W[LangGraph support workflow]
+    W -->|Scoped tools and atomic JSON checkpoint| D
+    W --> R
+    W -->|Classification / constrained fact composition| L
     M[Alembic / database owner] --> D
 ```
 
@@ -24,8 +33,10 @@ representations. Auth tokens are HttpOnly cookies; login responses contain no to
 mutations are rejected, provider errors are generalized, validation errors omit raw input, and SQL
 parameters are hidden in database errors. Request IDs contain no customer information.
 
-Gemini has no database credentials or automatic tool execution in Phases 1–2. Its adapter is invoked only by the explicit CLI
-smoke command. Startup, health checks, seed commands, and Auth/order/refund/escalation routes make no Gemini requests.
+Gemini has no database credentials or automatic tool execution. The chat adapter serves explicit CLI
+checks and the opt-in support graph. The separate embedding adapter serves explicit policy indexing/evaluation
+and opt-in authenticated policy search. Startup, health checks, seed commands, and
+Auth/order/refund/escalation routes make no Gemini requests.
 There is no offline pretend-AI fallback. Missing keys and provider failures are explicit failures.
 
 The development SQLite fallback tests application behavior but cannot prove PostgreSQL access restrictions.
@@ -66,8 +77,8 @@ Restart the API after switching environments. The product frontend and backend h
   will be implemented with the UI.
 - Logout requests refresh-session revocation; already-issued access JWTs may remain valid until expiry.
 - Refund lifecycle transitions and reservation release remain deferred. Submitted requests are simulated.
-- No document ingestion, vector index, AI conversation memory, agent trace, or model evaluation has
-  been implemented yet.
+- Markdown policy ingestion and vector retrieval are implemented; uploads, conversation memory,
+  agent traces, and chat-model workflow evaluation remain deferred.
 - Future traces must transmit sanitized summaries/metadata rather than raw customer messages or graph state.
 
 ## Phase 2 business operations
@@ -91,3 +102,49 @@ Refund review routes are read-only. No endpoint transfers money or marks a refun
 Migration `0003` extends the existing eleven tables and adds `refund_lines` and `audit_events`, both
 with forced RLS and no client grants. Legacy active requests conservatively reserve whole orders,
 without fabricating confirmation timestamps or item allocations.
+
+## Phase 3 policy evidence
+
+Migration `0004` extends `policy_documents` and adds `policy_chunks` with `vector(768)` and a frozen
+embedding-space constraint. pgvector can live in `public` or Supabase's `extensions` schema. Connection
+search paths are fixed to those two schemas; runtime still switches to `service_role`, while migrations
+retain owner identity. Chunk DML grants are backend-only; RLS is enabled and forced without client policies.
+
+The packaged manifest pins Markdown file hashes, source versions, rules version, and chunker version.
+Indexing preserves complete sections and atomically publishes the full corpus, serialized by a PostgreSQL
+advisory transaction lock. Identical sources are skipped without provider calls; immutable source/version
+conflicts are refused. Failed provider batches leave no partial publication. Explicit rerun recovers
+missing/incomplete chunks from approved source bytes.
+
+Retrieval validates current source identities and exact sections against the packaged corpus before
+query embedding. pgvector exact cosine candidates are reranked with an IDF-weighted keyword overlap
+bonus; a semantic floor and meaningful policy-term overlap govern admission. Results contain exact
+excerpts and stable source/version/hash/section citations, never generated policy or refund decisions.
+Missing evidence or conflicting current sources yield explicit human-review states with no citations.
+Historical sources do not compete with the current corpus. SQLite's JSON/vector arithmetic is only
+the explicit development/test fallback. See `phase-3-review.md` for boundaries and measured evaluation.
+
+## Phase 4 support turns
+
+The graph holds backend-verified customer/actor identity in code, never accepts identity from graph/model
+fields, and validates current ownership before touching memory or business records. Classification
+extracts intent and optional order/policy search context. Order and policy reads use separate sessions
+when concurrent. Structured response generation selects trusted fact IDs; rendering preserves required
+facts and exact cited excerpts. Unsupported or conflicting evidence remains explicit.
+
+Explicit item selections produce 15-minute refund quotes. A separate structured confirmation action
+must reference an owned active quote with exact current policy and amount. The deterministic tool
+rechecks eligibility and reservations. Quote consumption, simulated request, audit, messages, checkpoint,
+execution, and replay result commit together. PostgreSQL advisory locks reject overlapping turns;
+same-key retries replay committed results. Changed instructions invalidate pending previews.
+
+The custom JSON-only LangGraph saver stages worker writes and commits the latest END snapshot from
+the coordinating session. Persistence is at turn boundaries; no mid-node resume or time travel is
+promised. Failed/disconnected uncommitted turns roll back and can rerun safely. SSE publishes fixed
+progress events and validated committed text, never raw provider tokens or checkpoint state.
+
+Automatic LangSmith callbacks are disabled even under inherited tracing settings. Manual optional
+export builds a new metadata allowlist without customer/thread/order identifiers or raw text. Internal
+execution records retain observed usage, completeness, latency, versioned chat-cost estimates, and safe
+error categories. External delivery remains unverified until a LangSmith key is configured. See
+`phase-4-review.md` for contracts, model/pricing references, evaluation results, and recovery limits.

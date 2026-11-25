@@ -29,6 +29,10 @@ def settings(tmp_path, monkeypatch):
         "SUPABASE_URL": "https://example.supabase.co",
         "SUPABASE_PUBLISHABLE_KEY": "test-key",
         "GEMINI_API_KEY": "",
+        "POLICY_SEARCH_ENABLED": "false",
+        "WORKFLOW_ENABLED": "false",
+        "WORKFLOW_TRACING_ENABLED": "false",
+        "LANGSMITH_API_KEY": "",
         "ALLOWED_ORIGINS": '["http://localhost:3000","http://127.0.0.1:8000"]',
     }
     for key, value in values.items():
