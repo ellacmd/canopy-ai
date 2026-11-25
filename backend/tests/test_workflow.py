@@ -400,3 +400,18 @@ def test_checkpoint_scope_and_json_only():
 def test_confirmation_never_coerces_model_or_textual_consent(value):
     with pytest.raises(ValidationError):
         Confirmation(quote_id=uuid4(), confirmed=value, policy_version=POLICY_VERSION)
+
+
+def test_customer_reads_a_current_quote_and_hides_it_after_expiry(client, workflow_setup, engine):
+    conversation, _, _ = workflow_setup
+    preview = invoke(workflow_setup, {"selection": selection().model_dump(mode="json")})
+    path = f"/api/conversations/{conversation}/quote"
+    maya = {"Authorization": "Bearer maya-token"}
+    jordan = {"Authorization": "Bearer jordan-token"}
+    assert client.get(path, headers=jordan).status_code == 404
+    assert client.get(path, headers=maya).json() == preview.quote.model_dump(mode="json")
+
+    with Session(engine) as db, db.begin():
+        db.get(RefundQuote, preview.quote.id).expires_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    assert client.get(path, headers=maya).json() is None

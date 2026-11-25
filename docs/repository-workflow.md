@@ -32,6 +32,7 @@ It intentionally has no path filters, so documentation-only changes still produc
 |---|---|
 | Quality and secrets | Conventional PR title, Ruff lint/format, actionlint, private-file guard, full-history Gitleaks |
 | Backend tests | Complete suite with disposable PostgreSQL on Python 3.12/PG15 and Python 3.13/PG17; wheel build |
+| Frontend build and browser tests | Next.js production build, TypeScript, and Chromium against disposable FastAPI |
 | Dependency audit | Locked Python packages and npm lockfile advisories |
 | Required CI | Fails if any required job fails, is cancelled, or is skipped |
 

@@ -328,3 +328,26 @@ def test_request_rejects_empty_and_oversized_inputs():
         SearchRequest(query="   ")
     with pytest.raises(ValidationError):
         SearchRequest(query="x" * 501)
+
+
+def test_staff_policy_index_reports_integrity_without_requesting_embeddings(client, engine):
+    staff = {"Authorization": "Bearer support-token"}
+    customer = {"Authorization": "Bearer maya-token"}
+    path = "/api/policies/index"
+    assert client.get(path, headers=customer).status_code == 403
+    assert {source["status"] for source in client.get(path, headers=staff).json()["sources"]} == {
+        "missing"
+    }
+
+    with Session(engine) as db, db.begin():
+        index_corpus(db, SyntheticEmbedder())
+        chunk = db.scalar(select(PolicyChunk).limit(1))
+        chunk.content += "Unexpected change"
+
+    reviewed = client.get(path, headers=staff).json()["sources"]
+    assert sorted(source["status"] for source in reviewed) == ["needs_review", "ready", "ready"]
+    assert all(
+        "Unexpected change" not in section["text"]
+        for source in reviewed
+        for section in source["sections"]
+    )

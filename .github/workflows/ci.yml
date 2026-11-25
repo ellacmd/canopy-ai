@@ -84,6 +84,29 @@ jobs:
       - name: Build backend wheel
         run: uv build --wheel --out-dir "$RUNNER_TEMP/wheel"
 
+  frontend-tests:
+    name: Frontend build and browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CANOPY_BACKEND_URL: http://127.0.0.1:8010
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: "0.10.10"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - run: uv sync --project backend --frozen --python 3.12
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
   dependencies:
     name: Dependency audit
     runs-on: ubuntu-latest
@@ -105,7 +128,7 @@ jobs:
   required:
     name: Required CI
     if: ${{ always() }}
-    needs: [quality, backend-tests, dependencies]
+    needs: [quality, backend-tests, frontend-tests, dependencies]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

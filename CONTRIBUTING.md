@@ -1,7 +1,7 @@
 # Contributing
 
 Canopy AI is developed in reviewed phases. Read [the plan](docs/plan.md) and
-[the current handoff](docs/HANDOFF.md) before proposing work. UI implementation is paused.
+[the current handoff](docs/HANDOFF.md) before proposing work.
 The project owner has not selected a license yet; no open-source license is included.
 
 ## Development setup
@@ -60,8 +60,20 @@ dedicated disposable database. CI creates one and runs the full suite on Python 
 and Python 3.13/PostgreSQL 17 using versioned pgvector images. No Supabase/Gemini account or repository
 secret is required for CI.
 External provider calls are mocked in the test suite. Real cloud verification is a separate explicit step.
-The parked frontend has no application routes yet, so its build/E2E tests are deferred; its dependency
-lockfile is still audited.
+The browser gate builds the Next.js app and runs both roles against a disposable FastAPI server with
+synthetic Auth and model providers. Run it locally with Node.js 24 after syncing the backend:
+
+```sh
+npm ci
+CANOPY_BACKEND_URL=http://127.0.0.1:8010 npm run build
+npm run typecheck
+npx playwright install chromium
+npm run test:e2e
+```
+
+Playwright starts both services and creates its own SQLite database. Ports 3100 and 8010 must be free.
+The local fixture exercises sessions, same-key refund retry, chat history and citations, staff review,
+and customer isolation. No hosted credentials are required.
 
 Update `backend/uv.lock` with Python dependency changes. Update `package-lock.json` with npm changes.
 Review Dependabot PRs normally; automatic merging is disabled. When updating Gitleaks/actionlint,

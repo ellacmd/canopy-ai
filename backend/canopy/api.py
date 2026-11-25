@@ -1,8 +1,6 @@
 import secrets
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from datetime import datetime
-from decimal import Decimal
 from threading import Lock
 from time import monotonic
 from uuid import UUID
@@ -12,7 +10,6 @@ from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Respo
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -29,68 +26,14 @@ from canopy.auth import (
 )
 from canopy.config import Settings
 from canopy.db import get_db, make_engine
-from canopy.models import Customer, Order, OrderItem, Product, Shipment
+from canopy.models import Customer, Order
+from canopy.operations_api import router as operations_router
+from canopy.order_views import OrderDetail, OrderSummary, Tracking, order_view
 from canopy.policy_api import router as policy_router
 from canopy.support_api import customer_tools
 from canopy.support_api import router as support_router
 from canopy.tools import SupportTools
 from canopy.workflow_api import router as workflow_router
-
-
-class OrderSummary(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: UUID
-    order_number: str
-    status: str
-    payment_status: str
-    total_amount: Decimal
-    currency: str
-    created_at: datetime
-    delivered_at: datetime | None
-
-
-class OrderLine(BaseModel):
-    order_item_id: UUID
-    product_name: str
-    sku: str
-    quantity: int
-    unit_price: Decimal
-    remaining_refundable_quantity: int
-
-
-class Tracking(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    carrier: str
-    tracking_number: str
-    status: str
-    estimated_delivery: datetime | None
-
-
-class OrderDetail(OrderSummary):
-    items: list[OrderLine]
-    shipment: Tracking | None
-
-
-def order_view(order: Order, db: Session) -> OrderDetail:
-    rows = db.execute(
-        select(OrderItem, Product).join(Product).where(OrderItem.order_id == order.id)
-    ).all()
-    shipment = db.scalar(select(Shipment).where(Shipment.order_id == order.id))
-    return OrderDetail(
-        **OrderSummary.model_validate(order).model_dump(),
-        items=[
-            OrderLine(
-                order_item_id=item.id,
-                product_name=product.name,
-                sku=product.sku,
-                quantity=item.quantity,
-                unit_price=item.unit_price,
-                remaining_refundable_quantity=item.quantity - item.refund_reserved_quantity,
-            )
-            for item, product in rows
-        ],
-        shipment=Tracking.model_validate(shipment) if shipment else None,
-    )
 
 
 class LoginLimiter:
@@ -308,4 +251,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(support_router)
     app.include_router(policy_router)
     app.include_router(workflow_router)
+    app.include_router(operations_router)
     return app

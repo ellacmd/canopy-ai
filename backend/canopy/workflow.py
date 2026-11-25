@@ -124,6 +124,17 @@ def order_context(engine, customer_id, actor_id, number, order_id=None):
         }
 
 
+def quote_view(quote: RefundQuote) -> QuoteView:
+    return QuoteView(
+        id=quote.id,
+        amount=str(quote.amount),
+        currency=quote.currency,
+        policy_version=quote.policy_version,
+        expires_at=utc(quote.expires_at),
+        selection=EligibilityInput.model_validate(quote.selection),
+    )
+
+
 class SupportWorkflow:
     def __init__(self, engine, settings: Settings, *, customer_id, actor_id, model, embedder):
         self.engine, self.settings = engine, settings
@@ -357,16 +368,6 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                 )
         return {**update, "result": result, "facts": facts}
 
-    def quote_view(self, quote):
-        return QuoteView(
-            id=quote.id,
-            amount=str(quote.amount),
-            currency=quote.currency,
-            policy_version=quote.policy_version,
-            expires_at=quote.expires_at,
-            selection=EligibilityInput.model_validate(quote.selection),
-        ).model_dump(mode="json")
-
     def cancel_quote(self, quote_id):
         if quote_id:
             quote = self.db.scalar(
@@ -515,7 +516,9 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                 self.db.add(quote)
                 self.db.flush()
                 update["active_quote"] = str(quote.id)
-                result.update(state="awaiting_confirmation", quote=self.quote_view(quote))
+                result.update(
+                    state="awaiting_confirmation", quote=quote_view(quote).model_dump(mode="json")
+                )
                 facts.append(
                     {
                         "id": "quote",
@@ -546,7 +549,9 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                 else None
             )
             if quote and quote.status == "pending" and utc(quote.expires_at) > datetime.now(UTC):
-                result.update(state="awaiting_confirmation", quote=self.quote_view(quote))
+                result.update(
+                    state="awaiting_confirmation", quote=quote_view(quote).model_dump(mode="json")
+                )
                 facts.append(
                     {
                         "id": "confirm",

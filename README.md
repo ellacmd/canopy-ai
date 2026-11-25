@@ -2,11 +2,29 @@
 
 An intelligent customer support platform for the fictional e-commerce store Amazora.
 
-**Current stage: Phase 4 authenticated LangGraph support workflows.**
-Multi-turn order/tracking/policy support, explicit simulated-refund confirmation, human escalation,
-checkpoint memory, validated SSE responses, and safe execution metadata work through the backend.
-Policy retrieval uses a separately frozen Gemini embedding model and versioned citations. UI work
-remains deferred.
+**Current stage: Phase 5 web application.**
+Customers can track orders, ask for cited policy information, review and explicitly confirm a
+simulated refund, and contact support. Staff can manage tickets and inspect refund, policy index,
+and execution details. All business operations use the authenticated FastAPI backend.
+
+## Start the web application
+
+Start the configured backend below, then run these commands from the repository root with Node.js 24:
+
+```sh
+npm ci
+npm run dev
+```
+
+Open [Canopy AI](http://127.0.0.1:3000) and sign in with a configured Supabase customer or support
+account. Next.js forwards same-origin `/api` requests to FastAPI on `http://127.0.0.1:8000`.
+Set server-side `CANOPY_BACKEND_URL` before starting development or building to use a different
+backend origin, and include the web origin in the backend's `ALLOWED_ORIGINS`.
+Automatic refresh across tabs uses Web Locks on HTTPS and trustworthy local origins.
+
+Chat turns and policy search respect the existing backend provider opt-ins. The browser suite uses
+synthetic provider responses and a disposable database. See [browser verification](CONTRIBUTING.md#required-checks)
+for the full local test command.
 
 ## Start the backend
 
@@ -163,8 +181,8 @@ Then call `GET /api/orders`. Sign in as a second linked customer and verify that
 returns `404`. `POST /api/auth/refresh` rotates the session; `POST /api/auth/logout` clears cookies and
 requests revocation of the refresh session. Already-issued access JWTs may remain valid until expiry.
 
-For future browser deployment, serve frontend and API on the same site (for example via a Next.js proxy)
-and configure explicit `ALLOWED_ORIGINS`. Cookies are Secure in production and SameSite=Lax.
+The Next.js rewrite serves the frontend and API on the same origin. Configure explicit
+`ALLOWED_ORIGINS` on the backend. Cookies are Secure in production and SameSite=Lax.
 Untrusted-origin mutations are rejected. Never return Auth tokens to frontend JavaScript or localStorage.
 Use HTTPS for production. Production startup rejects SQLite and incomplete Auth configuration.
 
@@ -181,6 +199,8 @@ Use HTTPS for production. Production startup rejects SQLite and incomplete Auth 
 | POST | `/api/policies/search` | Verified account; cited policy excerpts, when query embedding is enabled |
 | POST/GET | `/api/conversations` | Create/list owned customer conversations |
 | GET | `/api/conversations/{id}/messages` | Owned conversation history |
+| GET | `/api/conversations/{id}/history` | Recent owned messages with stored policy citations |
+| GET | `/api/conversations/{id}/quote` | Current owned unexpired refund preview |
 | GET | `/api/conversations/{id}/executions` | Owned safe execution metadata |
 | POST | `/api/conversations/{id}/turns` | Atomic support turn, when enabled; `Idempotency-Key` required |
 | POST | `/api/conversations/{id}/turns/stream` | Progress plus validated response SSE |
@@ -197,7 +217,11 @@ Use HTTPS for production. Production startup rejects SQLite and incomplete Auth 
 | GET | `/api/admin/refunds` | Support/admin refund review |
 | GET | `/api/admin/escalations` | Support/admin ticket queue |
 | PATCH | `/api/admin/escalations/{id}` | Support/admin assignment and status |
-| GET | `/api/admin/summary` | Support/admin aggregate counts |
+| GET | `/api/admin/summary`, `/api/admin/queue-metrics` | Support/admin aggregate counts |
+| GET | `/api/admin/escalations/{id}/context` | Ticket, linked order, customer, recent messages and executions |
+| GET | `/api/admin/refunds/{id}/context` | Refund, linked order and customer |
+| GET | `/api/admin/executions` | Staff execution metadata and recorded stages |
+| GET | `/api/policies/index` | Staff inspection of the approved corpus and index integrity |
 
 See [Phase 2 review](docs/phase-2-review.md) for business APIs and
 [Phase 4 review](docs/phase-4-review.md) for the multi-turn support workflow.
@@ -252,10 +276,10 @@ docs/
   plan.md              Phases and review gates
   architecture.md      Data and identity boundaries
   amazora-rules.md      Approved versioned policy rules
-src/                   Reserved for the later Next.js interface; currently empty
+src/                   Next.js customer and staff workspaces
+tests/e2e/             Browser workflows against the disposable FastAPI test server
 ```
 
-The earlier frontend scaffold remains parked. No application is deployed.
 LangGraph and LangSmith are backend-only dependencies; no frontend provider keys are used.
 
 ## Repository workflow and handoff
