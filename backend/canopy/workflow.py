@@ -9,7 +9,7 @@ from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from threading import Lock
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import TypedDict
 from uuid import UUID, uuid4
 
@@ -39,6 +39,7 @@ from canopy.models import (
     WorkflowCheckpoint,
     WorkflowTurn,
 )
+from canopy.provider_retry import retry_provider
 from canopy.published_policy import latest_policy
 from canopy.retrieval import SearchRequest, search_policy
 from canopy.tools import SupportTools
@@ -152,22 +153,38 @@ class SupportWorkflow:
     def call(self, schema, payload, system):
         if self.settings.gemini_model != MODEL:
             raise ModelUnavailable("Support workflow requires its evaluated model")
-        self.admission.provider("chat", self.actor_id)
-        self.stats["model_calls"] += 1
+
+        def admit():
+            self.admission.provider("chat", self.actor_id)
+            self.stats["model_calls"] += 1
+
+        def generate():
+            try:
+                return self.model.generate_structured(
+                    json.dumps(payload), system=system, schema=schema
+                )
+            except ModelUnavailable as error:
+                self.stats["input_tokens"] += error.input_tokens
+                self.stats["output_tokens"] += error.output_tokens
+                self.stats["usage_complete"] &= error.usage_complete
+                self.stats["provider_attempt_errors"].append(error.code)
+                raise
+            except Exception:
+                self.stats["usage_complete"] = False
+                raise ModelUnavailable("Support model is unavailable") from None
+
         try:
-            result = self.model.generate_structured(
-                json.dumps(payload), system=system, schema=schema
+            result = retry_provider(
+                generate,
+                attempts=self.settings.provider_max_attempts,
+                before_attempt=admit,
+                timeout=self.settings.gemini_timeout_seconds,
+                deadline=self.provider_deadline,
+                deadline_error=lambda message: ModelUnavailable(message, code="provider_deadline"),
             )
         except ModelUnavailable as error:
-            self.stats["input_tokens"] += error.input_tokens
-            self.stats["output_tokens"] += error.output_tokens
-            self.stats["usage_complete"] &= error.usage_complete
             self.stats["error_code"] = error.code
             raise
-        except Exception:
-            self.stats["usage_complete"] = False
-            self.stats["error_code"] = "provider_unavailable"
-            raise ModelUnavailable("Support model is unavailable") from None
         self.stats["input_tokens"] += result.input_tokens
         self.stats["output_tokens"] += result.output_tokens
         self.stats["usage_complete"] &= result.usage_complete
@@ -249,6 +266,9 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                             query=state.get("policy_query") or "What are the standard return rules?"
                         ),
                         before_query=admit_embedding,
+                        provider_attempts=self.settings.provider_max_attempts,
+                        provider_timeout=self.settings.gemini_timeout_seconds,
+                        provider_deadline=self.provider_deadline,
                     )
                 except EmbeddingUnavailable:
                     self.stats["error_code"] = "embedding_unavailable"
@@ -489,7 +509,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                     "required": True,
                 }
             ]
-        elif action == "escalate":
+        elif action == "escalate" or state["intent"] == "human":
             self.cancel_quote(state.get("active_quote"))
             update["active_quote"] = None
             order = (
@@ -611,18 +631,6 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                         "required": True,
                     }
                 )
-        elif state["intent"] == "human":
-            result["state"] = "needs_human_review"
-            facts.append(
-                {
-                    "id": "human",
-                    "text": (
-                        "I can connect you with support. "
-                        "Confirm that you want a support ticket created."
-                    ),
-                    "required": True,
-                }
-            )
         elif state["intent"] in {"tracking", "order_status"} and not result["order"] and not facts:
             result["state"] = "needs_information"
             facts.append(
@@ -750,11 +758,13 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
         self.body, self.turn_id, self.trace_id = body, uuid4(), str(uuid4())
         self.conversation_id = conversation_id
         self.started = perf_counter()
+        self.provider_deadline = monotonic() + self.settings.workflow_provider_budget_seconds
         self.stats = {
             "input_tokens": 0,
             "output_tokens": 0,
             "model_calls": 0,
             "embedding_calls": 0,
+            "provider_attempt_errors": [],
             "usage_complete": True,
             "stages": [],
             "error_code": None,

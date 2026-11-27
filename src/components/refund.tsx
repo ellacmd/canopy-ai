@@ -105,12 +105,11 @@ export function QuoteReview({ quote, disabled, onConfirm, onCancel }: {
     {order.resource.state === "ready" && <ul className="item-list">
       {quote.selection.items.map((item) => {
         const detail = order.resource.state === "ready" && order.resource.data.items.find((line) => line.order_item_id === item.order_item_id);
-        return <li key={item.order_item_id}><span>{detail ? detail.product_name : item.order_item_id}</span><strong>×{item.quantity}</strong></li>;
+        return <li key={item.order_item_id}><span>{detail ? detail.product_name : "Item details unavailable"}</span><strong>×{item.quantity}</strong></li>;
       })}
     </ul>}
     <dl className="facts">
       <div><dt>Reason</dt><dd>{label(quote.selection.reason)}</dd></div>
-      <div><dt>Policy</dt><dd>{quote.policy_version}</dd></div>
       <div><dt>Expires</dt><dd>{dateTime(quote.expires_at)}</dd></div>
     </dl>
     {expired && <p role="status">This preview expired. Request a new preview to confirm.</p>}

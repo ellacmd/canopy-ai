@@ -51,6 +51,8 @@ def search(
             embedder,
             body,
             before_query=lambda: request.app.state.admission.provider("embedding", principal.id),
+            provider_attempts=request.app.state.settings.provider_max_attempts,
+            provider_timeout=request.app.state.settings.gemini_timeout_seconds,
         )
     except EmbeddingUnavailable:
         raise HTTPException(503, "Policy embedding provider is unavailable") from None
@@ -105,7 +107,7 @@ def index_status(
                         {
                             "heading": section.heading,
                             "anchor": section.anchor,
-                            "text": published_section(source, section, current),
+                            "text": published_section(source, section, current, for_staff=True),
                         }
                         for section in source.sections
                     ],

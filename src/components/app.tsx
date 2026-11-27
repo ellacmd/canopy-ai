@@ -4,7 +4,7 @@ import { Activity, ArrowRight, BookOpen, Inbox, LogOut, MessageCircle, Package, 
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, api, describeError, SESSION_EXPIRED, SESSION_REVISION, signIn, signOut } from "@/lib/api";
 import type { OrderDetail, Principal } from "@/lib/contracts";
-import { Chat } from "./chat";
+import { Chat, type SupportMode } from "./chat";
 import { CustomerOrders, CustomerRefunds } from "./customer";
 import { Dashboard, StaffInbox, StaffRefunds } from "./operations";
 import { PolicyAdministration } from "./policy-administration";
@@ -75,6 +75,15 @@ function Workspace({ principal, onSignedOut }: { principal: Principal; onSignedO
   const [section, setSection] = useState<Section>(navigation[0].id);
   const [refundOrder, setRefundOrder] = useState<OrderDetail>();
   const [callActive, setCallActive] = useState(false);
+  const supportModeKey = `canopy:support-mode:${principal.id}`;
+  const [supportMode, setSupportMode] = useState<SupportMode | undefined>(() => {
+    try {
+      const saved = window.sessionStorage.getItem(supportModeKey);
+      return saved === "call" || saved === "chat" ? saved : undefined;
+    } catch {
+      return undefined;
+    }
+  });
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
 
@@ -84,6 +93,11 @@ function Workspace({ principal, onSignedOut }: { principal: Principal; onSignedO
       const headings = document.querySelectorAll<HTMLElement>("#main-content h1");
       Array.from(headings).find((heading) => heading.getClientRects().length > 0)?.focus();
     });
+  }
+
+  function chooseSupportMode(mode: SupportMode) {
+    setSupportMode(mode);
+    try { window.sessionStorage.setItem(supportModeKey, mode); } catch { /* Keep the in-memory preference. */ }
   }
 
   async function logout() {
@@ -118,11 +132,15 @@ function Workspace({ principal, onSignedOut }: { principal: Principal; onSignedO
     </aside>
     <main id="main-content" className="workspace" tabIndex={-1}>
       {error && <ErrorNotice message={error} />}
-      {callActive && section !== "chat" && <aside className="ongoing-call">
+      {callActive && (section !== "chat" || supportMode === "chat" || refundOrder) && <aside className="ongoing-call">
         <span role="status"><Phone size={16} aria-hidden /> Call in progress</span>
-        <button type="button" className="button secondary small" onClick={() => navigate("chat")}>Back to call</button>
+        <button type="button" className="button secondary small" onClick={() => {
+          setRefundOrder(undefined);
+          chooseSupportMode("call");
+          navigate("chat");
+        }}>Back to call</button>
       </aside>}
-      {isCustomer && <div hidden={section !== "chat"}><Chat key={principal.id} customerId={principal.id}
+      {isCustomer && <div hidden={section !== "chat"}><Chat mode={supportMode} onMode={chooseSupportMode}
         callActive={callActive} onCallActive={setCallActive} reviewOrder={refundOrder}
         onReviewOpened={() => setRefundOrder(undefined)} /></div>}
       {section === "orders" && <CustomerOrders onRefund={(order) => { setRefundOrder(order); navigate("chat"); }} />}

@@ -71,6 +71,8 @@ test.describe("browser voice support", () => {
     await signIn(page, "jordan", "call");
     await page.getByRole("button", { name: "Start call" }).click();
     await expect(page.getByText("Canopy is speaking", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Text chat", exact: true }).click();
+    await expect(page.getByText("Call in progress", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "My orders" }).click();
     await expect(page.getByText("Call in progress", { exact: true })).toBeVisible();
     await page.evaluate(async () => {
@@ -98,13 +100,14 @@ test.describe("browser voice support", () => {
     await page.getByRole("button", { name: "Submit refund request" }).click();
     await expect(page.getByRole("region", { name: "Refund receipt" })).toContainText("$89.00");
     await page.evaluate(() => window.dispatchEvent(new Event("fixture-speech")));
+    await expect(page.getByText("Ending call…", { exact: true })).toBeVisible();
     await expect(page.getByText("Call ended.")).toBeVisible();
     await page.getByText("Call transcript", { exact: true }).click();
     const transcript = page.getByRole("list", { name: "Call transcript entries" });
     await expect(transcript).toContainText("I changed my mind");
     await expect(transcript).toContainText("Goodbye. Have a great day.");
     await page.getByRole("button", { name: "Text chat", exact: true }).click();
-    await expect(page.getByText("I changed my mind", { exact: false })).toHaveCount(0);
+    await expect(page.getByText("I changed my mind", { exact: false })).toBeHidden();
     await page.getByRole("button", { name: "New conversation" }).click();
     await expect(page.getByLabel("Message Canopy")).toBeVisible();
   });

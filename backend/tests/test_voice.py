@@ -313,6 +313,7 @@ class BrowserLive(FakeLive):
             self.emit(spoken(turn_complete=True))
         if "activity_start" in values:
             self.emit(spoken(interrupted=True))
+            self.emit(spoken(turn_complete=True))
         if "activity_end" in values:
             self.spoken_turns += 1
             if self.spoken_turns > 1:

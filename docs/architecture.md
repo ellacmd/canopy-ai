@@ -1,8 +1,8 @@
-# Backend architecture — Phases 1–4
+# Canopy AI architecture — current source (`0008`)
 
 ```mermaid
 flowchart LR
-    B[Future browser UI] -->|Same-site API requests| A[FastAPI]
+    B[Next.js customer and staff UI] -->|Same-origin API and voice WebSocket| A[FastAPI]
     A -->|Password / token verification| S[Supabase Auth]
     A -->|Verified identity and ownership filter| D[(PostgreSQL)]
     C[Explicit CLI smoke test] --> L[Gemini adapter]
@@ -72,6 +72,17 @@ Restart the API after switching environments. The product frontend and backend h
 
 ## Production behavior
 
+- Caddy terminates HTTPS and sends `/api/*` (including voice WebSockets) and `/health/*` directly
+  to FastAPI; remaining requests go to Next.js. Backend credentials stay server-only.
+- Source schema head is `0008`. Revision `0007` separates call and chat history; `0008` stores
+  published return-policy revisions. Admin publication serializes against confirmations; stale
+  previews cannot authorize a request under a different policy version.
+- Gemini Live receives opted-in microphone audio; only transcripts and verified evidence persist.
+  Automatic live-call reconnection is not implemented, because replaying a session can repeat tools.
+- Text-model and API query-embedding retries use known transient errors only, jitter, and a maximum
+  attempt count (default 2). Each attempt is admitted separately. Text turns share a monotonic
+  80-second provider budget; a full configured request timeout must fit before starting an attempt.
+  SDK retries remain disabled. Domain writes still commit once through the existing atomic workflow.
 - PostgreSQL shares authentication and workflow rate limits and daily Gemini usage counters. Counter
   admissions commit before provider calls and survive a workflow rollback.
 - Supabase Auth verifies each authenticated request. The browser coordinates explicit refresh across

@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     gemini_model: str = Field(default="gemini-3.5-flash-lite", min_length=1)
     gemini_max_output_tokens: int = Field(default=512, ge=64, le=2048)
     gemini_timeout_seconds: float = Field(default=20, ge=1, le=60)
+    provider_max_attempts: int = Field(default=2, ge=1, le=3)
+    workflow_provider_budget_seconds: float = Field(default=80, ge=1, le=80)
     gemini_max_input_characters: int = Field(default=12000, ge=100, le=50000)
     # Opt in after configuring provider terms suitable for customer-entered query text.
     # Public/synthetic CLI indexing and evaluation do not require this flag.

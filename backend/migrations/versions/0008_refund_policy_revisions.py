@@ -27,13 +27,13 @@ def upgrade():
         "VALUES (1, '{}', CURRENT_TIMESTAMP)"
     )
     if op.get_context().dialect.name == "postgresql":
-        op.execute("ALTER TABLE public.refund_policy_revisions ENABLE ROW LEVEL SECURITY")
-        op.execute("ALTER TABLE public.refund_policy_revisions FORCE ROW LEVEL SECURITY")
+        op.execute('ALTER TABLE public."refund_policy_revisions" ENABLE ROW LEVEL SECURITY')
+        op.execute('ALTER TABLE public."refund_policy_revisions" FORCE ROW LEVEL SECURITY')
         op.execute(
-            "REVOKE ALL ON TABLE public.refund_policy_revisions FROM PUBLIC, anon, authenticated"
+            'REVOKE ALL ON TABLE public."refund_policy_revisions" FROM PUBLIC, anon, authenticated'
         )
         op.execute(
-            "GRANT SELECT, INSERT, UPDATE ON TABLE public.refund_policy_revisions TO service_role"
+            'GRANT SELECT, INSERT, UPDATE ON TABLE public."refund_policy_revisions" TO service_role'
         )
 
 

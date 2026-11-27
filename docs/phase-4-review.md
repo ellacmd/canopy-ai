@@ -157,7 +157,9 @@ WORKFLOW_EVAL_DATABASE_URL=postgresql+psycopg://postgres:TEST_PASSWORD@127.0.0.1
   --interval-seconds 6 --max-attempts 4
 ```
 
-Pacing and retries are **evaluation-only explicit options**. Runtime requests still make one attempt.
+The historical Phase 4 build used one runtime attempt; pacing and whole-turn retries were
+evaluation-only explicit options. Current text workflows separately retry known transient provider
+failures with quota accounting and a shared deadline; see [the release runbook](release.md).
 Evaluation defaults to one turn attempt; the maximum is four, using the same key and a bounded
 10-second backoff only for transient provider failures. Every failed attempt remains in execution metrics.
 Reports separate active latency from deliberate pacing/backoff and record observed states, failures,
@@ -176,7 +178,7 @@ four-attempt evaluation budget. All eleven failures were provider/service or con
 (HTTP 503/504, connection errors/timeouts, or read timeouts); no failed case reported a completed
 response that violated its expected routing/state/evidence assertions. This is **not a passing end-to-end
 reliability gate** or a 100% accuracy result. Earlier unpaced runs also encountered rate limits. Runtime
-has no implicit retry; clients must retry a failed turn with the same key. Provider/network availability
+had no implicit retry; clients retried failed turns with the same key. Provider/network availability
 must improve and the live suite must be rerun before claiming reliable customer-facing operation.
 
 The [saved live report](evaluations/phase-4-workflow.json) preserves every case and failure, observed

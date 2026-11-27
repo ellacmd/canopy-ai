@@ -8,6 +8,7 @@ from google.genai import types
 from pydantic import BaseModel
 
 from canopy.config import Settings
+from canopy.provider_retry import provider_error_code
 
 
 class ModelUnavailable(RuntimeError):
@@ -127,25 +128,7 @@ class GeminiModel:
             # Provider errors may contain key-bearing URLs or request contents. Do not expose them.
             raise ModelUnavailable(
                 "Gemini request failed; check model access, API key, quota, and connectivity",
-                code=(
-                    "rate_limited"
-                    if getattr(error, "code", None) == 429
-                    else f"provider_http_{error.code}"
-                    if getattr(error, "code", None) in {400, 401, 403, 404, 500, 502, 503, 504}
-                    else "provider_" + type(error).__name__
-                    if type(error).__name__
-                    in {
-                        "ReadTimeout",
-                        "ConnectTimeout",
-                        "ConnectError",
-                        "RemoteProtocolError",
-                        "JSONDecodeError",
-                        "AttributeError",
-                        "TypeError",
-                        "ValidationError",
-                    }
-                    else "provider_unavailable"
-                ),
+                code=provider_error_code(error),
             ) from None
 
     def close(self) -> None:

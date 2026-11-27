@@ -72,7 +72,6 @@ export function CustomerRefunds() {
           {resource.data.map((refund) => <li key={refund.id} className="refund-history-row">
             <div className="row-between"><strong>{money(refund.amount, refund.currency)} · {label(refund.reason)}</strong><Badge value={refund.status} /></div>
             <p>Submitted {dateTime(refund.created_at)}</p>
-            <code className="identifier">{refund.id}</code>
           </li>)}
         </ul>
         <Pager count={resource.data.length} offset={offset} onChange={setOffset} />

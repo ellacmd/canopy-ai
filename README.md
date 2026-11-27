@@ -2,10 +2,14 @@
 
 An intelligent customer support platform for the fictional e-commerce store Amazora.
 
-**Current stage: Phase 5 web application.**
+**Current stage: Phase 6 release hardening, with voice calls and versioned return-policy administration.**
 Customers can track orders, ask for cited policy information, review and explicitly confirm a
 simulated refund, and contact support. Staff can manage tickets and inspect refund, policy index,
 and execution details. All business operations use the authenticated FastAPI backend.
+
+The source requires migration **`0008`**. Hosting and fresh live-provider release evidence remain
+outstanding. See the [release requirements and runbook](docs/release.md) and
+[current verification status](docs/phase-6-review.md) before deploying.
 
 ## Start the web application
 
@@ -36,12 +40,17 @@ briefly lowers the reply volume. The reply continues if the evidence fades, or s
 is sustained. The browser keeps a short audio buffer to preserve the first words and allows
 longer pauses during an unfinished thought when a live transcript is available.
 Call activity shows order lookups, policy checks, refund preparation, and staff routing as they run.
-Canopy can fill a refund preview from the details given on the call and routes policy exceptions
-to staff. A simulated submission requires the customer's explicit on-screen confirmation. The
-call acknowledges the result aloud. The authenticated same-origin WebSocket uses Gemini Live.
+Canopy can fill a refund preview from the details given on the call and sends returns that need
+a person to the support inbox. Eligible refund requests require on-screen confirmation before
+submission. The call stays connected across workspace pages and ends after Canopy says goodbye.
+The authenticated same-origin WebSocket uses Gemini Live.
 Canopy saves call transcripts separately from text chat and stores verified policy evidence.
 Canopy does not store call audio. Enable `POLICY_SEARCH_ENABLED` for cited policy lookups and
 `WORKFLOW_ENABLED` for text support. The browser suite uses a synthetic voice provider.
+
+Administrators can publish return rules and section guidance under **Return policy**. The new
+version applies to new previews, and customers with an older preview review it again. Support
+staff can read the current policy and follow up on tickets from **Support inbox**.
 
 ## Start the backend
 
@@ -133,7 +142,11 @@ uv run python -m canopy gemini-smoke
 `gemini-smoke` makes one small synthetic request and reports success and token counts.
 It requires model access and quota in your Google account. A configured key alone does not verify them.
 The adapter has a 20-second timeout, a 12,000-character input cap, a 512-token output cap,
-no automatic tool calling, and no implicit retries. Thinking tokens count toward reported output usage.
+no automatic tool calling, and no SDK retries. Text workflows and API query embeddings explicitly
+retry known transient failures up to `PROVIDER_MAX_ATTEMPTS` (default 2), admitting every attempt
+against shared quotas. Text turns share an 80-second provider budget; invalid output and business
+actions are not retried. Direct CLI adapter calls make one attempt.
+Thinking tokens count toward reported output usage.
 Limits are configurable in `.env`. This limits a request; it is **not** a monthly spending cap.
 
 Use synthetic data while prototyping with a free tier. See Google's current
@@ -241,6 +254,10 @@ budgets across replicas. See the [release runbook](docs/release.md) for deployme
 | GET | `/api/admin/refunds/{id}/context` | Refund, linked order and customer |
 | GET | `/api/admin/executions` | Staff execution metadata and recorded stages |
 | GET | `/api/policies/index` | Staff inspection of the approved corpus and index integrity |
+| GET | `/api/policies/returns` | Support/admin current published return policy |
+| GET | `/api/policies/returns/history` | Admin policy revision history |
+| PUT | `/api/policies/returns` | Admin publication with expected revision; stale updates conflict |
+| WebSocket | `/api/conversations/{id}/voice` | Owned call conversation; voice feature opt-in |
 
 See [Phase 2 review](docs/phase-2-review.md) for business APIs and
 [Phase 4 review](docs/phase-4-review.md) for the multi-turn support workflow.

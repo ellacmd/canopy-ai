@@ -84,8 +84,10 @@ def publish(db: Session, publication: PolicyPublication, actor_id: UUID) -> Publ
     return result
 
 
-def published_section(source: Source, section: Section, policy: PublishedPolicy) -> str:
-    if policy.revision == 1:
+def published_section(
+    source: Source, section: Section, policy: PublishedPolicy, *, for_staff=False
+) -> str:
+    if policy.revision == 1 and not for_staff:
         return section.text
     rules = policy.rules
     replacements = {
@@ -94,7 +96,7 @@ def published_section(source: Source, section: Section, policy: PublishedPolicy)
             "The order must be paid and delivered, and the items must be available to return."
         ),
         "exact-paid-amounts": (
-            f"A simulated refund uses {rules.refund_percent}% of the price actually paid "
+            f"A refund request uses {rules.refund_percent}% of the price actually paid "
             "for the selected items, rounded down to the nearest cent for each item line. "
             "The request must fit within the amount still available to refund."
             + (
@@ -116,6 +118,32 @@ def published_section(source: Source, section: Section, policy: PublishedPolicy)
         "explicit-confirmation": (
             "The customer must confirm the quoted items and amount using the on-screen button. "
             "We check the current policy and order again before submitting the request."
+        ),
+        "payment-and-order-state": (
+            "Standard returns are available for paid, delivered orders. Cancelled orders, "
+            "returned orders, and payments already refunded are ineligible. If the delivery "
+            "date or payment details are unclear, the support team can help."
+        ),
+        "excluded-items": "Gift cards and other excluded products need a support review.",
+        "damage-and-exceptions": (
+            "Canopy sends damaged items, wrong items, and unusual returns to support for review, "
+            "even when the standard return window has closed."
+        ),
+        "discounts-tax-and-shipping-allocations": (
+            "The price paid for the items must match the order total. A specialist checks any "
+            "unclear discounts, taxes, or shipping charges."
+        ),
+        "simulation-and-physical-returns": (
+            "You can submit a request before sending your items back. Canopy records the request "
+            "for review. No payment is transferred here."
+        ),
+        "duplicate-submissions": (
+            "Retrying the same submission returns the original request. Once an item is included "
+            "in a submitted request, that quantity is unavailable for another request."
+        ),
+        "human-support-and-policy-authority": (
+            "A specialist reviews returns Canopy cannot handle on its own. The support team "
+            "receives the conversation and can check any linked order."
         ),
     }
     body = replacements.get(section.anchor)

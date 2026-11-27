@@ -12,10 +12,11 @@ import { VoiceCall } from "./voice-call";
 const HISTORY_SIZE = 40;
 
 type PendingTurn = { body: TurnBody; key: string };
-type SupportMode = "call" | "chat";
+export type SupportMode = "call" | "chat";
 
-export function Chat({ customerId, callActive, onCallActive, reviewOrder, onReviewOpened }: {
-  customerId: string;
+export function Chat({ mode, onMode, callActive, onCallActive, reviewOrder, onReviewOpened }: {
+  mode?: SupportMode;
+  onMode: (mode: SupportMode) => void;
   callActive: boolean;
   onCallActive: (active: boolean) => void;
   reviewOrder?: OrderDetail;
@@ -26,19 +27,10 @@ export function Chat({ customerId, callActive, onCallActive, reviewOrder, onRevi
   const [blocked, setBlocked] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
-  const modeKey = `canopy:support-mode:${customerId}`;
-  const [mode, setMode] = useState<SupportMode | undefined>(() => {
-    try {
-      const saved = window.sessionStorage.getItem(modeKey);
-      return saved === "call" || saved === "chat" ? saved : undefined;
-    } catch {
-      return undefined;
-    }
-  });
   const [selectedCall, setSelectedCall] = useState<string>();
   const voice = useResource<{ enabled: boolean }>("/voice");
   const canCall = voice.resource.state === "ready" && voice.resource.data.enabled;
-  const activeMode = callActive ? "call" : reviewOrder ? "chat" : mode ?? (canCall ? "call" : "chat");
+  const activeMode = reviewOrder ? "chat" : mode ?? (canCall ? "call" : "chat");
   const threads = useResource<Conversation[]>(`/conversations?channel=chat&limit=${PAGE_SIZE}&offset=${offset}`);
   const calls = useResource<Conversation[]>(canCall ? "/conversations?channel=call&limit=10" : null);
   const recentCalls = calls.resource.state === "ready" ? calls.resource.data : [];
@@ -48,11 +40,6 @@ export function Chat({ customerId, callActive, onCallActive, reviewOrder, onRevi
   useEffect(() => {
     if (active && !selected) setSelected(active);
   }, [active, selected]);
-
-  function selectMode(next: SupportMode) {
-    setMode(next);
-    try { window.sessionStorage.setItem(modeKey, next); } catch { /* Keep the in-memory preference. */ }
-  }
 
   async function create() {
     if (creating || blocked) return;
@@ -86,11 +73,11 @@ export function Chat({ customerId, callActive, onCallActive, reviewOrder, onRevi
     <PageHeading title="Customer support">Get help with orders, returns, and policy questions.</PageHeading>
     {canCall && <div className="support-mode" role="group" aria-label="Support channel">
       <button type="button" className="button" aria-pressed={activeMode === "call"} disabled={!!reviewOrder || blocked}
-        onClick={() => selectMode("call")}><Phone size={16} aria-hidden /> Voice call</button>
-      <button type="button" className="button" aria-pressed={activeMode === "chat"} disabled={callActive}
-        onClick={() => selectMode("chat")}><MessageCircle size={16} aria-hidden /> Text chat</button>
+        onClick={() => onMode("call")}><Phone size={16} aria-hidden /> Voice call</button>
+      <button type="button" className="button" aria-pressed={activeMode === "chat"}
+        onClick={() => onMode("chat")}><MessageCircle size={16} aria-hidden /> Text chat</button>
     </div>}
-    {canCall && activeMode === "call" ? <div className="call-layout">
+    {canCall && <div hidden={activeMode !== "call"}><div className="call-layout">
       <VoiceCall disabled={blocked}
         conversationId={currentCall}
         prepare={createCall} onActive={onCallActive} onEvent={voiceEvent} />
@@ -105,7 +92,8 @@ export function Chat({ customerId, callActive, onCallActive, reviewOrder, onRevi
           </li>)}
         </ul>
       </section>}
-    </div> : <>
+    </div></div>}
+    {activeMode === "chat" && <>
     {createError && <ErrorNotice message={createError} />}
     <div className="chat-layout">
       <section className="panel history-panel" aria-labelledby="history-title">
@@ -130,7 +118,7 @@ export function Chat({ customerId, callActive, onCallActive, reviewOrder, onRevi
       <section className="panel chat-panel" aria-labelledby="conversation-title">
         <div className="panel-header"><h2 id="conversation-title"><MessageCircle size={18} aria-hidden /> Conversation</h2></div>
         {active ? <ConversationPanel key={active.id} conversation={active} reviewOrder={reviewOrder} onReviewOpened={() => {
-          selectMode("chat");
+          onMode("chat");
           onReviewOpened();
         }} switching={creating} onBlocked={setBlocked} onUpdated={threads.reload} /> :
           <Empty title={reviewOrder ? `Start a conversation to review ${reviewOrder.order_number}` : "Start a support conversation"}>

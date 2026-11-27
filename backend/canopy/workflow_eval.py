@@ -25,23 +25,13 @@ from canopy.embedding import GeminiEmbedder
 from canopy.llm import GeminiModel, ModelUnavailable
 from canopy.models import AgentExecution, Conversation, Order, OrderItem, RefundRequest
 from canopy.policy import POLICY_VERSION
+from canopy.provider_retry import TRANSIENT_PROVIDER_CODES
 from canopy.retrieval import index_corpus
 from canopy.seed import seed_data, seed_id
 from canopy.workflow import MODEL, PRICING_VERSION, SupportWorkflow
 from canopy.workflow_contracts import TurnInput
 
-TRANSIENT_MODEL_CODES = {
-    "rate_limited",
-    "provider_http_500",
-    "provider_http_502",
-    "provider_http_503",
-    "provider_http_504",
-    "provider_ReadTimeout",
-    "provider_ConnectTimeout",
-    "provider_ConnectError",
-    "provider_RemoteProtocolError",
-    "provider_unavailable",
-}
+TRANSIENT_MODEL_CODES = TRANSIENT_PROVIDER_CODES | {"provider_unavailable", "provider_deadline"}
 SUITES = {"baseline": "workflow-v1.json", "release": "workflow-release-v1.json"}
 
 
@@ -55,7 +45,7 @@ def percentiles(values: list[float]) -> dict:
 
 
 class PacedModel:
-    """Evaluation-only pacing. Runtime requests still make one attempt and fail explicitly."""
+    """Evaluation-only pacing; runtime retry and admission policy remains in the workflow."""
 
     def __init__(self, model, interval):
         self.model, self.interval = model, interval
@@ -325,6 +315,9 @@ def evaluate_workflow(
                     "embedding_calls": sum(d["embedding_calls"] for d in details),
                     "usage_complete": all(d["usage_complete"] for d in details),
                     "model_errors_across_attempts": model_errors,
+                    "provider_attempt_errors": [
+                        code for d in details for code in d.get("provider_attempt_errors", [])
+                    ],
                     "error_codes": [d.get("error_code") for d in details if d.get("error_code")],
                     "observed": observations,
                     "latency_ms_excluding_pacing": timings,
@@ -346,11 +339,17 @@ def evaluate_workflow(
             "pricing_version": PRICING_VERSION,
             "cases": len(results),
             "maximum_turn_attempts": max_attempts,
+            "provider_max_attempts": configured.provider_max_attempts,
+            "provider_timeout_seconds": configured.gemini_timeout_seconds,
+            "workflow_provider_budget_seconds": configured.workflow_provider_budget_seconds,
             "minimum_seconds_between_model_calls": interval,
             "passed": sum(row["passed"] for row in results),
             "provider_unavailable": sum(row["error"] == "provider_unavailable" for row in results),
             "cases_with_provider_attempt_errors": sum(
-                any(code in TRANSIENT_MODEL_CODES for code in row["model_errors_across_attempts"])
+                any(
+                    code in TRANSIENT_MODEL_CODES
+                    for code in row["model_errors_across_attempts"] + row["provider_attempt_errors"]
+                )
                 for row in results
             ),
             "turn_latency_ms_excluding_pacing": percentiles(

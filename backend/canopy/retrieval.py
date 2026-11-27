@@ -12,6 +12,7 @@ from canopy.corpus import CHUNKER_VERSION, Source, digest, load_corpus
 from canopy.embedding import EMBEDDING_SPACE, Embedder, EmbeddingUnavailable, unit_vector
 from canopy.models import PolicyChunk, PolicyDocument
 from canopy.policy import POLICY_VERSION
+from canopy.provider_retry import retry_provider
 from canopy.published_policy import latest_policy, published_section
 
 # Evaluated against the checked-in synthetic cases; cosine similarity, not confidence.
@@ -250,7 +251,14 @@ def conflict() -> SearchResult:
 
 
 def search_policy(
-    db: Session, embedder: Embedder, request: SearchRequest, *, before_query=None
+    db: Session,
+    embedder: Embedder,
+    request: SearchRequest,
+    *,
+    before_query=None,
+    provider_attempts=1,
+    provider_timeout=20,
+    provider_deadline=None,
 ) -> SearchResult:
     """Validate evidence before spending query tokens; search only the current corpus."""
     sources = load_corpus()
@@ -281,9 +289,14 @@ def search_policy(
             return conflict()
     if embedder.space != EMBEDDING_SPACE:
         raise EmbeddingUnavailable("Query embedding space differs from the frozen index")
-    if before_query is not None:
-        before_query()
-    vectors = embedder.embed([request.query], task="query")
+    vectors = retry_provider(
+        lambda: embedder.embed([request.query], task="query"),
+        attempts=provider_attempts,
+        before_attempt=before_query or (lambda: None),
+        timeout=provider_timeout,
+        deadline=provider_deadline if provider_deadline is not None else float("inf"),
+        deadline_error=lambda message: EmbeddingUnavailable(message, code="provider_deadline"),
+    )
     if len(vectors) != 1:
         raise EmbeddingUnavailable("Embedding provider returned an incomplete query")
     vector = unit_vector(vectors[0])
