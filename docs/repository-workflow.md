@@ -33,6 +33,7 @@ It intentionally has no path filters, so documentation-only changes still produc
 | Quality and secrets | Conventional PR title, Ruff lint/format, actionlint, private-file guard, full-history Gitleaks |
 | Backend tests | Complete suite with disposable PostgreSQL on Python 3.12/PG15 and Python 3.13/PG17; wheel build |
 | Frontend build and browser tests | Next.js production build, TypeScript, and Chromium against disposable FastAPI |
+| Release images and schema | Compose and Caddy configuration, image builds, packaged migration, schema drift, and image startup |
 | Dependency audit | Locked Python packages and npm lockfile advisories |
 | Required CI | Fails if any required job fails, is cancelled, or is skipped |
 
@@ -52,15 +53,11 @@ files alone do not activate branch protection or account-level security features
 
 ## Delivery and deployment
 
-CI verifies that the backend wheel builds. Product deployment is deferred to Phase 6: no app host,
-production domain, deployment credentials, or rollback target has been selected. There is no automatic
-deployment or live database migration from GitHub Actions. Hosted Supabase is development infrastructure.
-
-When deployment is requested, first choose the frontend/backend hosts, then implement a reviewed
-artifact/container build and staging deployment. Run migrations as a controlled release step with backup
-and compatibility planning; keep runtime and migration credentials separate. Gate production through a
-protected GitHub environment, use OIDC where the chosen host supports it, and verify health and rollback.
-Never expose production secrets to fork PRs. These are future release requirements, not completed CD.
+CI builds the backend wheel and checks the frontend and backend release images against disposable
+services. The [release runbook](release.md) covers the reviewed Compose artifacts, staging, explicit
+owner migrations, and rollback. Hosted release needs a selected host, HTTPS domain and isolated
+Supabase configuration. Keep runtime and migration credentials separate. The current GitHub workflow
+uses no cloud credentials and performs no live migrations.
 
 ## References
 

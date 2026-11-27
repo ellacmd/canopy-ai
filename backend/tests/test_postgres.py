@@ -1,7 +1,9 @@
 """Runs against a dedicated disposable PostgreSQL database in CI, never a user database."""
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
+from uuid import uuid4
 
 import pytest
 from alembic import command
@@ -9,9 +11,10 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
+from canopy.admission import DAY, Admission, Limit, LimitExceeded
 from canopy.config import Settings
 from canopy.db import Base, make_engine
-from canopy.models import Customer
+from canopy.models import AdmissionCounter, Customer
 from canopy.seed import seed_data
 
 
@@ -64,9 +67,27 @@ def test_postgres_migrations_seed_rls_and_runtime_role(monkeypatch, migration_co
         )
     for role in ("anon", "authenticated"):
         with owner.connect() as connection:
-            connection.execute(text(f"SET ROLE {role}"))
-            with pytest.raises(ProgrammingError):
-                connection.execute(select(Customer))
-            connection.rollback()
+            for table in (Customer, AdmissionCounter):
+                connection.execute(text(f"SET ROLE {role}"))
+                with pytest.raises(ProgrammingError):
+                    connection.execute(select(table))
+                connection.rollback()
+
+    second_runtime = make_engine(settings)
+    replicas = [Admission(runtime, settings), Admission(second_runtime, settings)]
+    bucket = Limit("test-concurrent-reservations", str(uuid4()), 7, DAY)
+
+    def reserve(index):
+        try:
+            replicas[index % len(replicas)].take(bucket)
+        except LimitExceeded:
+            return False
+        return True
+
+    try:
+        with ThreadPoolExecutor(max_workers=12) as workers:
+            assert sum(workers.map(reserve, range(32))) == 7
+    finally:
+        second_runtime.dispose()
     runtime.dispose()
     owner.dispose()

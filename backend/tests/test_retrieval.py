@@ -65,6 +65,32 @@ def test_corpus_is_versioned_bounded_and_consistent_with_rules():
     )
 
 
+def test_query_embedding_retry_is_admitted_each_time(engine, indexed, monkeypatch):
+    monkeypatch.setattr("canopy.provider_retry.sleep", lambda _: None)
+    original = indexed.embed
+    attempts = 0
+
+    def flaky(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise EmbeddingUnavailable("temporary", code="provider_http_503")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(indexed, "embed", flaky)
+    admit = Mock()
+    with Session(engine) as db:
+        result = search_policy(
+            db,
+            indexed,
+            SearchRequest(query="Can I return a gift card?"),
+            before_query=admit,
+            provider_attempts=2,
+        )
+    assert result.status == "evidence_found"
+    assert attempts == admit.call_count == 2
+
+
 @pytest.mark.parametrize(
     "markdown",
     [

@@ -1,6 +1,7 @@
 import json
 from contextlib import closing
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -9,16 +10,17 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from canopy.admission import LimitExceeded
 from canopy.auth import Principal, current_customer, current_principal
 from canopy.conversation_views import recent_messages
 from canopy.db import get_db
 from canopy.embedding import EmbeddingUnavailable, GeminiEmbedder
 from canopy.llm import GeminiModel, ModelUnavailable
 from canopy.models import AgentExecution, Conversation, Customer, Message, RefundQuote
-from canopy.policy import POLICY_VERSION
+from canopy.published_policy import latest_policy
 from canopy.support_api import IdempotencyKey
 from canopy.workflow import SupportWorkflow, owned_conversation, quote_view
-from canopy.workflow_contracts import QuoteView, TurnInput, TurnResult
+from canopy.workflow_contracts import ConversationInput, QuoteView, TurnInput, TurnResult
 
 router = APIRouter(prefix="/api/conversations", tags=["support workflow"])
 
@@ -43,6 +45,7 @@ def get_workflow(
             actor_id=principal.id,
             model=model,
             embedder=embedder,
+            admission=request.app.state.admission,
         )
     except (ModelUnavailable, EmbeddingUnavailable):
         raise HTTPException(503, "Support model service is unavailable") from None
@@ -55,12 +58,19 @@ def get_workflow(
 
 @router.post("", status_code=201)
 def create_conversation(
-    customer: Customer = Depends(current_customer), db: Session = Depends(get_db)
+    body: ConversationInput | None = None,
+    customer: Customer = Depends(current_customer),
+    db: Session = Depends(get_db),
 ):
-    record = Conversation(customer_id=customer.id)
+    record = Conversation(customer_id=customer.id, channel=body.channel if body else "chat")
     db.add(record)
     db.commit()
-    return {"id": record.id, "status": record.status, "created_at": record.created_at}
+    return {
+        "id": record.id,
+        "status": record.status,
+        "channel": record.channel,
+        "created_at": record.created_at,
+    }
 
 
 @router.get("")
@@ -69,18 +79,19 @@ def conversations(
     db: Session = Depends(get_db),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0, le=10000),
+    channel: Literal["chat", "call"] | None = None,
 ):
+    query = select(Conversation).where(Conversation.customer_id == customer.id)
+    if channel is not None:
+        query = query.where(Conversation.channel == channel)
     rows = db.scalars(
-        select(Conversation)
-        .where(Conversation.customer_id == customer.id)
-        .order_by(Conversation.updated_at.desc(), Conversation.id)
-        .limit(limit)
-        .offset(offset)
+        query.order_by(Conversation.updated_at.desc(), Conversation.id).limit(limit).offset(offset)
     ).all()
     return [
         {
             "id": c.id,
             "status": c.status,
+            "channel": c.channel,
             "updated_at": c.updated_at,
             "primary_intent": c.primary_intent,
         }
@@ -130,13 +141,14 @@ def active_quote(
     conversation = owned_conversation(db, conversation_id, customer.id)
     if conversation.status == "closed":
         return None
+    policy = latest_policy(db)
     quote = db.scalar(
         select(RefundQuote)
         .where(
             RefundQuote.conversation_id == conversation_id,
             RefundQuote.customer_id == customer.id,
             RefundQuote.status == "pending",
-            RefundQuote.policy_version == POLICY_VERSION,
+            RefundQuote.policy_version == policy.version,
             RefundQuote.expires_at > datetime.now(UTC),
         )
         .order_by(RefundQuote.created_at.desc(), RefundQuote.id)
@@ -197,6 +209,7 @@ def stream_turn(
     workflow: SupportWorkflow = Depends(get_workflow),
 ):
     owned_conversation(db, conversation_id, customer.id)
+    db.close()  # The stream performs its own ownership check and transaction.
 
     def generate():
         try:
@@ -206,6 +219,11 @@ def stream_turn(
                         for start in range(0, len(payload["text"]), 64):
                             yield sse("text_delta", {"text": payload["text"][start : start + 64]})
                     yield sse(event, payload)
+        except LimitExceeded as error:
+            yield sse(
+                "error",
+                {"code": error.code, "status": 429, "retry_after": error.retry_after},
+            )
         except HTTPException as error:
             yield sse("error", {"code": "request_rejected", "status": error.status_code})
         except (ModelUnavailable, SQLAlchemyError):

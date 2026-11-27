@@ -1,6 +1,6 @@
 # Handoff for the next development session
 
-Updated 25 November 2026. Read this file, `AGENTS.md`, and `docs/plan.md` before changing code.
+Updated 27 November 2026. Read this file, `AGENTS.md`, and `docs/plan.md` before changing code.
 Machine-specific notes are in ignored `.local/HANDOFF.md` on the maintainer's machine. Public clones
 must configure their own services. Never print secret configuration to reconstruct context.
 
@@ -40,7 +40,7 @@ Phase 4: one LangGraph coordinates Gemini structured intent classification, inde
 retrieval, deterministic actions, and constrained fact/citation composition. Owned JSON checkpoint
 memory, conversation history, explicit expiring refund quotes, turn replay, progress/validated SSE,
 safe execution usage/cost metadata, and optional metadata-only LangSmith export are implemented.
-Current migration head is `0005`, with seventeen domain tables; hosted development and local fallback
+Phase 4's migration head was `0005`, with seventeen domain tables; hosted development and local fallback
 are migrated. The local backend runs Phase 4 routes. See `docs/phase-4-review.md` for contracts and limits.
 
 Messages cannot authorize refunds. A separate explicit action must confirm a specific active owned quote,
@@ -122,11 +122,33 @@ The browser suite in `tests/e2e/` runs both roles against a disposable FastAPI s
 external providers. Its commands are in `CONTRIBUTING.md`. Hosted provider measurements and the
 open reliability gate remain documented in `docs/phase-4-review.md`.
 
-## Next product phase, when requested
+Phase 6 adds shared admission limits, daily provider quotas, production checks, and trace delivery
+status. Phase 6 initially reached `0006`. See [release](release.md) for the Compose topology,
+operations, and rollback. See [Phase 6 review](phase-6-review.md) for local verification and the remaining
+hosted rollout and live evaluation gate. The proposed topology needs a release host, HTTPS domain,
+separate Supabase environments and suitable Gemini and LangSmith credentials for live verification.
 
-Phase 6 handles release hardening, shared limits and budgets, operational retention/recovery, and
-deployment. Hosts, production environment, release artifacts, and rollback need to be selected
-before adding deployment jobs. No CI job migrates the live cloud database.
+Current source head is **`0008`**: `0007` separates text and call conversations; `0008` adds
+versioned return-policy publication/history with forced RLS. Admins publish rules and section guidance;
+support can read the current policy. Confirmations recheck the latest published version and stale
+previews require review. The approved hash-pinned Markdown corpus and embedding space stay unchanged.
+Authenticated Gemini Live calls persist transcripts separately from chat; audio is not stored.
+Voice stays disabled until live audio processing is approved for the provider project.
+
+Text chat and API query embeddings now explicitly retry known transient provider errors with jitter,
+up to `PROVIDER_MAX_ATTEMPTS` (2 by default). Every attempt consumes shared quota; text turns share
+an 80-second provider budget. Invalid model output, authorization errors and financial actions are not
+retried. Failed chat attempts preserve usage uncertainty and safe error categories in execution records.
+The SDK still makes one attempt. Voice session reconnection is not automatically retried.
+
+The captured **25/36** live result predates these changes. It remains failed release evidence.
+Run both fixtures with one turn attempt and then `scripts/check_release_evaluations.py`; see
+[the current review](phase-6-review.md). Do not claim the reliability gate passed from unit tests.
+
+27 November follow-up verification: 190 backend tests passed, 4 disposable-PostgreSQL tests skipped.
+TypeScript and the webpack production build passed; default Turbopack could not bind its internal
+workspace port. Ruff, public guard, actionlint and full-history Gitleaks passed locally. Live Gemini
+smoke failed with `provider_ConnectError`; no new live evaluation or remote CI pass is claimed.
 
 ## Important limits and working rules
 
@@ -134,8 +156,8 @@ Keep Supabase CRUD server-only, RLS forced and client access denied. Runtime use
 migrations use the owner. Use verified Auth IDs/app_metadata and ownership filters on every tool.
 Do not expose auth tokens in JavaScript or let editable metadata grant roles.
 
-The login limiter is process-local; shared rate limiting and enforced usage budgets remain release work.
-The UI coordinates refresh across tabs. Logout revokes refresh sessions; issued access
+Shared limits and call budgets use PostgreSQL. The UI coordinates refresh across tabs.
+Logout revokes refresh sessions. Issued access
 tokens may remain valid until expiry. Future traces must contain sanitized metadata, not raw customer data.
 
 Never use the shared/cloud database as `POSTGRES_TEST_URL`, reset it, or re-date shared seed records.

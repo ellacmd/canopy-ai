@@ -10,6 +10,7 @@ if (
 }
 
 const config: NextConfig = {
+  output: process.env.CANOPY_STANDALONE === "1" ? "standalone" : undefined,
   poweredByHeader: false,
   // Match the backend's bounded provider wait before a workflow stage is emitted.
   experimental: { proxyTimeout: 90_000 },

@@ -129,13 +129,45 @@ def confirmation(quote):
     }
 
 
+def test_transient_provider_retry_preserves_accounting_and_committed_replay(
+    workflow_setup, engine, monkeypatch
+):
+    monkeypatch.setattr("canopy.provider_retry.sleep", lambda _: None)
+    _, factory, model = workflow_setup
+    original = model.generate_structured
+    attempts = 0
+
+    def flaky(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise ModelUnavailable("temporary", code="provider_http_503")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(model, "generate_structured", flaky)
+    key = str(uuid4())
+    body = {"message": "Order status AMZ-1024"}
+    result = invoke(workflow_setup, body, key)
+    assert result.order["order_number"] == "AMZ-1024"
+    assert invoke(workflow_setup, body, key).replayed
+    assert attempts == 3  # Failed classification, successful classification, composition.
+    with Session(engine) as db:
+        execution = db.scalar(select(AgentExecution))
+        assert execution.status == "succeeded"
+        assert execution.details["model_calls"] == 3
+        assert execution.details["provider_attempt_errors"] == ["provider_http_503"]
+        assert execution.details["usage_complete"] is False
+        assert execution.details["error_code"] is None
+        assert db.scalar(select(func.count()).select_from(WorkflowTurn)) == 1
+
+
 def test_multiturn_order_tracking_and_checkpoint_survive_new_workflow_instance(
     workflow_setup, engine
 ):
     first = invoke(workflow_setup, {"message": "Order status AMZ-1024"})
     second = invoke(workflow_setup, {"message": "Where is it?"})
     assert first.order["order_number"] == "AMZ-1024"
-    assert second.intent == "tracking" and "SYNTHETIC-AMZ-1024" in second.text
+    assert second.intent == "tracking" and "tracking number AMZ-1024" in second.text
     with Session(engine) as db:
         checkpoint = db.scalar(select(WorkflowCheckpoint))
         assert checkpoint.snapshot["checkpoint"]["channel_values"]["order_number"] == "AMZ-1024"
@@ -154,7 +186,7 @@ def test_confirmation_is_explicit_quote_scoped_atomic_and_idempotent(workflow_se
     key = str(uuid4())
     confirmed = invoke(workflow_setup, body, key)
     assert confirmed.state == "submitted" and confirmed.refund["simulated"] is True
-    assert "not approval" in confirmed.text
+    assert "No payment has been transferred" in confirmed.text
     assert invoke(workflow_setup, body, key).replayed
     assert invoke(workflow_setup, body).refund["replayed"]
     with Session(engine) as db:
@@ -263,14 +295,12 @@ def test_fault_after_financial_node_rolls_back_action_and_quote_consumption(
         assert db.get(Order, selection().order_id).refund_reserved_amount == 0
 
 
-def test_escalation_is_explicit_and_retry_safe(workflow_setup, engine):
-    offered = invoke(workflow_setup, {"message": "I want a human"})
-    assert offered.state == "needs_human_review" and offered.escalation is None
+def test_asking_for_a_person_creates_a_ticket_and_is_retry_safe(workflow_setup, engine):
+    request = {"message": "I want a human"}
     key = str(uuid4())
-    result = invoke(workflow_setup, {"action": "escalate"}, key)
-    assert (
-        result.state == "escalated" and invoke(workflow_setup, {"action": "escalate"}, key).replayed
-    )
+    result = invoke(workflow_setup, request, key)
+    assert result.state == "escalated" and result.escalation
+    assert invoke(workflow_setup, request, key).replayed
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(Escalation)) == 1
 

@@ -1,17 +1,24 @@
-import { ArrowDown, ArrowUpRight, History, MessageCircle, Plus, Send } from "lucide-react";
+import { ArrowDown, ArrowUpRight, History, MessageCircle, Phone, Plus, Send } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, describeError, streamTurn } from "@/lib/api";
+import { api, describeError, jsonBody, streamTurn } from "@/lib/api";
 import type { Conversation, Message, OrderDetail, Quote, TurnBody, TurnResult } from "@/lib/contracts";
 import { dateTime, label, PAGE_SIZE, stageLabels } from "@/lib/format";
 import { useResource } from "@/lib/use-resource";
+import type { VoiceEvent } from "@/lib/voice";
 import { QuoteReview, RefundForm } from "./refund";
 import { Empty, ErrorNotice, Loading, PageHeading, Pager, Transcript } from "./ui";
+import { VoiceCall } from "./voice-call";
 
 const HISTORY_SIZE = 40;
 
 type PendingTurn = { body: TurnBody; key: string };
+export type SupportMode = "call" | "chat";
 
-export function Chat({ reviewOrder, onReviewOpened }: {
+export function Chat({ mode, onMode, callActive, onCallActive, reviewOrder, onReviewOpened }: {
+  mode?: SupportMode;
+  onMode: (mode: SupportMode) => void;
+  callActive: boolean;
+  onCallActive: (active: boolean) => void;
   reviewOrder?: OrderDetail;
   onReviewOpened: () => void;
 }) {
@@ -20,7 +27,14 @@ export function Chat({ reviewOrder, onReviewOpened }: {
   const [blocked, setBlocked] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
-  const threads = useResource<Conversation[]>(`/conversations?limit=${PAGE_SIZE}&offset=${offset}`);
+  const [selectedCall, setSelectedCall] = useState<string>();
+  const voice = useResource<{ enabled: boolean }>("/voice");
+  const canCall = voice.resource.state === "ready" && voice.resource.data.enabled;
+  const activeMode = reviewOrder ? "chat" : mode ?? (canCall ? "call" : "chat");
+  const threads = useResource<Conversation[]>(`/conversations?channel=chat&limit=${PAGE_SIZE}&offset=${offset}`);
+  const calls = useResource<Conversation[]>(canCall ? "/conversations?channel=call&limit=10" : null);
+  const recentCalls = calls.resource.state === "ready" ? calls.resource.data : [];
+  const currentCall = selectedCall ?? recentCalls[0]?.id;
   const active = selected ?? (threads.resource.state === "ready" ? threads.resource.data[0] : undefined);
   // Keep the auto-selected thread stable as history is refreshed or paged.
   useEffect(() => {
@@ -33,9 +47,10 @@ export function Chat({ reviewOrder, onReviewOpened }: {
     setCreating(true);
     try {
       const thread = await api<{ id: string; status: string; created_at: string }>("/conversations", { method: "POST" });
-      setSelected({ ...thread, updated_at: thread.created_at, primary_intent: null });
+      setSelected({ ...thread, updated_at: thread.created_at, primary_intent: null, channel: "chat" });
       setOffset(0);
       threads.reload();
+      return thread.id;
     } catch (error) {
       setCreateError(describeError(error));
     } finally {
@@ -43,8 +58,42 @@ export function Chat({ reviewOrder, onReviewOpened }: {
     }
   }
 
+  async function createCall() {
+    const call = await api<{ id: string }>("/conversations", jsonBody({ channel: "call" }));
+    setSelectedCall(call.id);
+    calls.reload();
+    return call.id;
+  }
+
+  function voiceEvent(event: VoiceEvent) {
+    if (event.type === "ended" || event.type === "error" || event.type === "ticket") calls.reload();
+  }
+
   return <>
-    <PageHeading title="Support chat">Get help with orders, returns, and policy questions.</PageHeading>
+    <PageHeading title="Customer support">Get help with orders, returns, and policy questions.</PageHeading>
+    {canCall && <div className="support-mode" role="group" aria-label="Support channel">
+      <button type="button" className="button" aria-pressed={activeMode === "call"} disabled={!!reviewOrder || blocked}
+        onClick={() => onMode("call")}><Phone size={16} aria-hidden /> Voice call</button>
+      <button type="button" className="button" aria-pressed={activeMode === "chat"}
+        onClick={() => onMode("chat")}><MessageCircle size={16} aria-hidden /> Text chat</button>
+    </div>}
+    {canCall && <div hidden={activeMode !== "call"}><div className="call-layout">
+      <VoiceCall disabled={blocked}
+        conversationId={currentCall}
+        prepare={createCall} onActive={onCallActive} onEvent={voiceEvent} />
+      {!callActive && recentCalls.length > 0 && <section className="panel call-history" aria-label="Recent calls">
+        <h2>Recent calls</h2>
+        <ul className="record-list">
+          {recentCalls.map((call, index) => <li key={call.id}>
+            <button type="button" className="record-button" aria-pressed={call.id === currentCall}
+              onClick={() => setSelectedCall(call.id)}>
+              <span><strong>{index === 0 ? "Latest call" : "Support call"}</strong><small>{dateTime(call.updated_at)}</small></span>
+            </button>
+          </li>)}
+        </ul>
+      </section>}
+    </div></div>}
+    {activeMode === "chat" && <>
     {createError && <ErrorNotice message={createError} />}
     <div className="chat-layout">
       <section className="panel history-panel" aria-labelledby="history-title">
@@ -68,22 +117,26 @@ export function Chat({ reviewOrder, onReviewOpened }: {
       </section>
       <section className="panel chat-panel" aria-labelledby="conversation-title">
         <div className="panel-header"><h2 id="conversation-title"><MessageCircle size={18} aria-hidden /> Conversation</h2></div>
-        {active ? <ConversationPanel key={active.id} conversation={active} reviewOrder={reviewOrder} onReviewOpened={onReviewOpened}
-          onBlocked={setBlocked} onUpdated={threads.reload} /> :
+        {active ? <ConversationPanel key={active.id} conversation={active} reviewOrder={reviewOrder} onReviewOpened={() => {
+          onMode("chat");
+          onReviewOpened();
+        }} switching={creating} onBlocked={setBlocked} onUpdated={threads.reload} /> :
           <Empty title={reviewOrder ? `Start a conversation to review ${reviewOrder.order_number}` : "Start a support conversation"}>
             Select New conversation to begin.
           </Empty>}
       </section>
     </div>
+    </>}
   </>;
 }
 
-function ConversationPanel({ conversation, reviewOrder, onReviewOpened, onBlocked, onUpdated }: {
+function ConversationPanel({ conversation, reviewOrder, onReviewOpened, onBlocked, onUpdated, switching }: {
   conversation: Conversation;
   reviewOrder?: OrderDetail;
   onReviewOpened: () => void;
   onBlocked: (blocked: boolean) => void;
   onUpdated: () => void;
+  switching: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [showRefund, setShowRefund] = useState(false);
@@ -98,7 +151,7 @@ function ConversationPanel({ conversation, reviewOrder, onReviewOpened, onBlocke
   const history = useResource<Message[]>(`${path}/history?limit=${HISTORY_SIZE}&offset=${offset}`);
   const quote = useResource<Quote | null>(`${path}/quote`);
   const closed = conversation.status === "closed";
-
+  const busy = !!pending || switching;
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => {
     if (completed && history.resource.state === "ready" && offset === 0) {
@@ -138,12 +191,12 @@ function ConversationPanel({ conversation, reviewOrder, onReviewOpened, onBlocke
   }
 
   function begin(body: TurnBody) {
-    if (!pending) void run({ body, key: crypto.randomUUID() });
+    if (!busy) void run({ body, key: crypto.randomUUID() });
   }
 
   function sendMessage(event: FormEvent) {
     event.preventDefault();
-    if (!draft.trim() || pending) return;
+    if (!draft.trim() || busy) return;
     begin({ action: "message", message: draft.trim() });
     setDraft("");
   }
@@ -171,8 +224,8 @@ function ConversationPanel({ conversation, reviewOrder, onReviewOpened, onBlocke
     </div>
     <div className="chat-controls">
       <div className="turn-status" role="status">
-        {stage || (completed?.refund ? `Simulated refund submitted. Reference ${completed.refund.id}.`
-          : completed?.escalation ? `Support ticket created. Reference ${completed.escalation.id}.` : "")}
+        {stage || (completed?.refund ? "Refund request submitted."
+          : completed?.escalation ? "Your request was sent to the support team." : "")}
       </div>
       {error && pending && <div className="form-stack">
         <ErrorNotice message={error} />
@@ -189,7 +242,7 @@ function ConversationPanel({ conversation, reviewOrder, onReviewOpened, onBlocke
       </div>}
       {quote.resource.state === "error" && <ErrorNotice message={quote.resource.error} retry={quote.reload} />}
       {quote.resource.state === "ready" && quote.resource.data && <QuoteReview key={quote.resource.data.id}
-        quote={quote.resource.data} disabled={!!pending || closed}
+        quote={quote.resource.data} disabled={busy || closed}
         onCancel={() => begin({ action: "cancel_refund" })}
         onConfirm={() => {
           if (quote.resource.state !== "ready" || !quote.resource.data) return;
@@ -199,24 +252,25 @@ function ConversationPanel({ conversation, reviewOrder, onReviewOpened, onBlocke
           } });
         }} />}
       {closed ? <p className="muted">This conversation is closed. Start a new conversation for more help.</p> : <>
-        {(showRefund || reviewOrder) && !pending && <RefundForm key={reviewOrder?.id ?? "search"} initialOrder={reviewOrder} onPreview={(selection) => {
+        {(showRefund || reviewOrder) && !busy && <RefundForm key={reviewOrder?.id ?? "search"}
+          initialOrder={reviewOrder} onPreview={(selection) => {
           begin({ action: "message", selection });
           setShowRefund(false);
           onReviewOpened();
         }} />}
         <div className="actions">
-          <button type="button" className="button quiet small" disabled={!!pending} aria-expanded={showRefund || !!reviewOrder} onClick={() => {
+          <button type="button" className="button quiet small" disabled={busy} aria-expanded={showRefund || !!reviewOrder} onClick={() => {
             setShowRefund(!(showRefund || reviewOrder));
             onReviewOpened();
           }}>Review a refund</button>
-          <button type="button" className="button quiet small" disabled={!!pending} onClick={() => begin({ action: "escalate" })}>
+          <button type="button" className="button quiet small" disabled={busy} onClick={() => begin({ action: "escalate" })}>
             Contact support <ArrowUpRight size={14} aria-hidden />
           </button>
         </div>
         <form className="composer" onSubmit={sendMessage}>
           <label className="sr-only" htmlFor="support-message">Message Canopy</label>
-          <textarea id="support-message" rows={2} value={draft} maxLength={2000} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about your order…" disabled={!!pending} />
-          <button type="submit" className="button primary" disabled={!!pending || !draft.trim()}><Send size={17} aria-hidden /> Send</button>
+          <textarea id="support-message" rows={2} value={draft} maxLength={2000} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about your order…" disabled={busy} />
+          <button type="submit" className="button primary" disabled={busy || !draft.trim()}><Send size={17} aria-hidden /> Send</button>
         </form>
       </>}
     </div>

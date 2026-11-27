@@ -61,7 +61,7 @@ export function CustomerRefunds() {
   const [offset, setOffset] = useState(0);
   const { resource, reload } = useResource<Refund[]>(`/refunds?limit=${PAGE_SIZE}&offset=${offset}`);
   return <>
-    <PageHeading title="Refund requests">Track your simulated requests. No payment is transferred.</PageHeading>
+    <PageHeading title="Refund requests">Track the refund requests you’ve submitted.</PageHeading>
     <section className="panel" aria-label="Your refund requests">
       <div className="panel-header"><h2>Your requests</h2><button className="button secondary small" type="button" onClick={reload}>Refresh</button></div>
       {resource.state === "loading" && <Loading />}
@@ -72,7 +72,6 @@ export function CustomerRefunds() {
           {resource.data.map((refund) => <li key={refund.id} className="refund-history-row">
             <div className="row-between"><strong>{money(refund.amount, refund.currency)} · {label(refund.reason)}</strong><Badge value={refund.status} /></div>
             <p>Submitted {dateTime(refund.created_at)}</p>
-            <code className="identifier">{refund.id}</code>
           </li>)}
         </ul>
         <Pager count={resource.data.length} offset={offset} onChange={setOffset} />

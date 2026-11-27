@@ -34,5 +34,6 @@ supabase/.temp/
 supabase/.branches/
 supabase/.env
 supabase/cloud.json
+deploy/supabase-ca.crt
 
 next-env.d.ts

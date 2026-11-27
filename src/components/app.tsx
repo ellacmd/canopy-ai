@@ -1,23 +1,24 @@
 "use client";
 
-import { Activity, ArrowRight, BookOpen, Inbox, LogOut, MessageCircle, Package, ReceiptText, ShieldCheck } from "lucide-react";
+import { Activity, ArrowRight, BookOpen, Inbox, LogOut, MessageCircle, Package, Phone, ReceiptText, ShieldCheck } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, api, describeError, SESSION_EXPIRED, SESSION_REVISION, signIn, signOut } from "@/lib/api";
 import type { OrderDetail, Principal } from "@/lib/contracts";
-import { Chat } from "./chat";
+import { Chat, type SupportMode } from "./chat";
 import { CustomerOrders, CustomerRefunds } from "./customer";
-import { Dashboard, PolicyAdministration, StaffInbox, StaffRefunds } from "./operations";
+import { Dashboard, StaffInbox, StaffRefunds } from "./operations";
+import { PolicyAdministration } from "./policy-administration";
 import { Brand, ErrorNotice, Loading } from "./ui";
 
 const customerNavigation = [
-  { id: "chat", text: "Support chat", icon: MessageCircle },
+  { id: "chat", text: "Support", icon: MessageCircle },
   { id: "orders", text: "My orders", icon: Package },
   { id: "customer-refunds", text: "Refund requests", icon: ReceiptText },
 ] as const;
 const staffNavigation = [
   { id: "inbox", text: "Support inbox", icon: Inbox },
   { id: "staff-refunds", text: "Refund review", icon: ReceiptText },
-  { id: "policies", text: "Policy administration", icon: BookOpen },
+  { id: "policies", text: "Return policy", icon: BookOpen },
   { id: "operations", text: "Operations", icon: Activity },
 ] as const;
 type Section = (typeof customerNavigation[number] | typeof staffNavigation[number])["id"];
@@ -73,6 +74,16 @@ function Workspace({ principal, onSignedOut }: { principal: Principal; onSignedO
   const navigation = isCustomer ? customerNavigation : staffNavigation;
   const [section, setSection] = useState<Section>(navigation[0].id);
   const [refundOrder, setRefundOrder] = useState<OrderDetail>();
+  const [callActive, setCallActive] = useState(false);
+  const supportModeKey = `canopy:support-mode:${principal.id}`;
+  const [supportMode, setSupportMode] = useState<SupportMode | undefined>(() => {
+    try {
+      const saved = window.sessionStorage.getItem(supportModeKey);
+      return saved === "call" || saved === "chat" ? saved : undefined;
+    } catch {
+      return undefined;
+    }
+  });
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
 
@@ -82,6 +93,11 @@ function Workspace({ principal, onSignedOut }: { principal: Principal; onSignedO
       const headings = document.querySelectorAll<HTMLElement>("#main-content h1");
       Array.from(headings).find((heading) => heading.getClientRects().length > 0)?.focus();
     });
+  }
+
+  function chooseSupportMode(mode: SupportMode) {
+    setSupportMode(mode);
+    try { window.sessionStorage.setItem(supportModeKey, mode); } catch { /* Keep the in-memory preference. */ }
   }
 
   async function logout() {
@@ -116,12 +132,22 @@ function Workspace({ principal, onSignedOut }: { principal: Principal; onSignedO
     </aside>
     <main id="main-content" className="workspace" tabIndex={-1}>
       {error && <ErrorNotice message={error} />}
-      {isCustomer && <div hidden={section !== "chat"}><Chat reviewOrder={refundOrder} onReviewOpened={() => setRefundOrder(undefined)} /></div>}
+      {callActive && (section !== "chat" || supportMode === "chat" || refundOrder) && <aside className="ongoing-call">
+        <span role="status"><Phone size={16} aria-hidden /> Call in progress</span>
+        <button type="button" className="button secondary small" onClick={() => {
+          setRefundOrder(undefined);
+          chooseSupportMode("call");
+          navigate("chat");
+        }}>Back to call</button>
+      </aside>}
+      {isCustomer && <div hidden={section !== "chat"}><Chat mode={supportMode} onMode={chooseSupportMode}
+        callActive={callActive} onCallActive={setCallActive} reviewOrder={refundOrder}
+        onReviewOpened={() => setRefundOrder(undefined)} /></div>}
       {section === "orders" && <CustomerOrders onRefund={(order) => { setRefundOrder(order); navigate("chat"); }} />}
       {section === "customer-refunds" && <CustomerRefunds />}
       {section === "inbox" && <StaffInbox principal={principal} />}
       {section === "staff-refunds" && <StaffRefunds />}
-      {section === "policies" && <PolicyAdministration />}
+      {section === "policies" && <PolicyAdministration role={principal.role} />}
       {section === "operations" && <Dashboard />}
     </main>
   </div>;

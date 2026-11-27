@@ -7,6 +7,7 @@ from google import genai
 from google.genai import types
 
 from canopy.config import Settings
+from canopy.provider_retry import provider_error_code
 
 # Changing this space requires a migration, reindex, and retrieval evaluation.
 EMBEDDING_MODEL = "gemini-embedding-001"
@@ -15,7 +16,9 @@ EMBEDDING_SPACE = "gemini-embedding-001:768:unit-v1"
 
 
 class EmbeddingUnavailable(RuntimeError):
-    pass
+    def __init__(self, message, *, code="embedding_unavailable"):
+        super().__init__(message)
+        self.code = code
 
 
 class Embedder(Protocol):
@@ -77,9 +80,10 @@ class GeminiEmbedder:
             return [unit_vector(item.values) for item in embeddings]
         except EmbeddingUnavailable:
             raise
-        except Exception:
+        except Exception as error:
             raise EmbeddingUnavailable(
-                "Embedding request failed; check model access, API key, quota, and connectivity"
+                "Embedding request failed; check model access, API key, quota, and connectivity",
+                code=provider_error_code(error),
             ) from None
 
     def close(self) -> None:

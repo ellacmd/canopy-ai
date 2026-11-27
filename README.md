@@ -2,10 +2,14 @@
 
 An intelligent customer support platform for the fictional e-commerce store Amazora.
 
-**Current stage: Phase 5 web application.**
+**Current stage: Phase 6 release hardening, with voice calls and versioned return-policy administration.**
 Customers can track orders, ask for cited policy information, review and explicitly confirm a
 simulated refund, and contact support. Staff can manage tickets and inspect refund, policy index,
 and execution details. All business operations use the authenticated FastAPI backend.
+
+The source requires migration **`0008`**. Hosting and fresh live-provider release evidence remain
+outstanding. See the [release requirements and runbook](docs/release.md) and
+[current verification status](docs/phase-6-review.md) before deploying.
 
 ## Start the web application
 
@@ -25,6 +29,28 @@ Automatic refresh across tabs uses Web Locks on HTTPS and trustworthy local orig
 Chat turns and policy search respect the existing backend provider opt-ins. The browser suite uses
 synthetic provider responses and a disposable database. See [browser verification](CONTRIBUTING.md#required-checks)
 for the full local test command.
+
+### Live browser calls
+
+After configuring microphone audio processing for your Gemini project, set `VOICE_ENABLED=true`
+in the backend environment and restart FastAPI. Use HTTPS or localhost. Customers can select
+**Start call** from the Voice call workspace, interrupt spoken replies, mute, and end the call.
+The browser runs a local speech detector before opening a caller turn. A possible interruption
+briefly lowers the reply volume. The reply continues if the evidence fades, or stops when speech
+is sustained. The browser keeps a short audio buffer to preserve the first words and allows
+longer pauses during an unfinished thought when a live transcript is available.
+Call activity shows order lookups, policy checks, refund preparation, and staff routing as they run.
+Canopy can fill a refund preview from the details given on the call and sends returns that need
+a person to the support inbox. Eligible refund requests require on-screen confirmation before
+submission. The call stays connected across workspace pages and ends after Canopy says goodbye.
+The authenticated same-origin WebSocket uses Gemini Live.
+Canopy saves call transcripts separately from text chat and stores verified policy evidence.
+Canopy does not store call audio. Enable `POLICY_SEARCH_ENABLED` for cited policy lookups and
+`WORKFLOW_ENABLED` for text support. The browser suite uses a synthetic voice provider.
+
+Administrators can publish return rules and section guidance under **Return policy**. The new
+version applies to new previews, and customers with an older preview review it again. Support
+staff can read the current policy and follow up on tickets from **Support inbox**.
 
 ## Start the backend
 
@@ -116,7 +142,11 @@ uv run python -m canopy gemini-smoke
 `gemini-smoke` makes one small synthetic request and reports success and token counts.
 It requires model access and quota in your Google account. A configured key alone does not verify them.
 The adapter has a 20-second timeout, a 12,000-character input cap, a 512-token output cap,
-no automatic tool calling, and no implicit retries. Thinking tokens count toward reported output usage.
+no automatic tool calling, and no SDK retries. Text workflows and API query embeddings explicitly
+retry known transient failures up to `PROVIDER_MAX_ATTEMPTS` (default 2), admitting every attempt
+against shared quotas. Text turns share an 80-second provider budget; invalid output and business
+actions are not retried. Direct CLI adapter calls make one attempt.
+Thinking tokens count toward reported output usage.
 Limits are configurable in `.env`. This limits a request; it is **not** a monthly spending cap.
 
 Use synthetic data while prototyping with a free tier. See Google's current
@@ -184,7 +214,9 @@ requests revocation of the refresh session. Already-issued access JWTs may remai
 The Next.js rewrite serves the frontend and API on the same origin. Configure explicit
 `ALLOWED_ORIGINS` on the backend. Cookies are Secure in production and SameSite=Lax.
 Untrusted-origin mutations are rejected. Never return Auth tokens to frontend JavaScript or localStorage.
-Use HTTPS for production. Production startup rejects SQLite and incomplete Auth configuration.
+Production requires HTTPS, a PostgreSQL connection with hostname and CA verification, an explicit
+origin allowlist, and a shared admission secret. PostgreSQL enforces rate limits and daily AI call
+budgets across replicas. See the [release runbook](docs/release.md) for deployment and recovery.
 
 ## Current API endpoints
 
@@ -222,6 +254,10 @@ Use HTTPS for production. Production startup rejects SQLite and incomplete Auth 
 | GET | `/api/admin/refunds/{id}/context` | Refund, linked order and customer |
 | GET | `/api/admin/executions` | Staff execution metadata and recorded stages |
 | GET | `/api/policies/index` | Staff inspection of the approved corpus and index integrity |
+| GET | `/api/policies/returns` | Support/admin current published return policy |
+| GET | `/api/policies/returns/history` | Admin policy revision history |
+| PUT | `/api/policies/returns` | Admin publication with expected revision; stale updates conflict |
+| WebSocket | `/api/conversations/{id}/voice` | Owned call conversation; voice feature opt-in |
 
 See [Phase 2 review](docs/phase-2-review.md) for business APIs and
 [Phase 4 review](docs/phase-4-review.md) for the multi-turn support workflow.
@@ -286,7 +322,7 @@ LangGraph and LangSmith are backend-only dependencies; no frontend provider keys
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for local hooks, Conventional Commits, pull requests, and
 checks. [Repository workflow](docs/repository-workflow.md) explains protected branches, CI, dependency
-updates, and the deferred deployment phase. Report vulnerabilities through [SECURITY.md](SECURITY.md).
+updates, and release checks. Report vulnerabilities through [SECURITY.md](SECURITY.md).
 The owner has deferred choosing a license; no open-source license is included yet.
 
 For the next development session, start with [docs/HANDOFF.md](docs/HANDOFF.md) and `AGENTS.md`.

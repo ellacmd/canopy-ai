@@ -20,10 +20,18 @@ Intent = Literal[
 ]
 
 
+def is_refund_affirmation(message: str) -> bool:
+    return message.lower().strip(".! ") in {"yes", "yes please", "confirm", "i confirm"}
+
+
 class Classification(Input):
     intent: Intent
     order_number: str | None = Field(default=None, pattern=r"^AMZ-[0-9]{4,10}$")
     policy_query: str | None = Field(default=None, min_length=3, max_length=300)
+
+
+class ConversationInput(Input):
+    channel: Literal["chat", "call"] = "chat"
 
 
 class GroundedReply(Input):

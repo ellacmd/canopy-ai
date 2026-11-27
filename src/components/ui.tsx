@@ -1,7 +1,7 @@
 import { AlertCircle, ArrowLeft, ArrowRight, Layers3, LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Message, OrderDetail } from "@/lib/contracts";
-import { dateTime, label, money, PAGE_SIZE } from "@/lib/format";
+import { dateTime, label, money, PAGE_SIZE, trackingNumber } from "@/lib/format";
 
 export function Brand() {
   return <div className="brand"><span className="brand-mark"><Layers3 size={21} aria-hidden /></span> Canopy<span className="brand-ai">AI</span></div>;
@@ -64,7 +64,7 @@ export function OrderContext({ order }: { order: OrderDetail }) {
     </ul>
     {order.shipment ? <div className="shipment">
       <strong>{order.shipment.carrier} · {label(order.shipment.status)}</strong>
-      <span className="identifier">{order.shipment.tracking_number}</span>
+      <span className="identifier">{trackingNumber(order.shipment.tracking_number)}</span>
       {order.shipment.estimated_delivery && order.status !== "delivered" && <span>Estimated {dateTime(order.shipment.estimated_delivery)}</span>}
     </div> : <p className="muted">Tracking details are unavailable.</p>}
   </div>;
@@ -88,9 +88,8 @@ export function Transcript({ messages }: { messages: Message[] }) {
       {message.citations.length > 0 && <div className="citations">
         <strong>Policy sources</strong>
         {message.citations.map((citation) => <details key={citation.locator}>
-          <summary>{citation.title} · {citation.section} <span className="muted">v{citation.source_version}</span></summary>
+          <summary>{citation.title} · {citation.section}</summary>
           <p className="prewrap">{citation.excerpt}</p>
-          <p className="muted">{citation.rules_version}</p>
         </details>)}
       </div>}
     </li>)}

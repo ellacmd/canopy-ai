@@ -117,9 +117,24 @@ Phase 4's live provider reliability gate remains open.
 
 ## Phase 6 — Reliability and release
 
-Expand evaluations and failure testing, add shared rate limits and enforced usage budgets, verify secure
-production configuration, health checks, CI, migrations, redaction, and browser behavior.
-Deploy frontend/backend/Supabase, document measured accuracy/latency/cost, and prepare portfolio evidence.
+Migration `0006` adds forced-RLS PostgreSQL admission counters for authentication, support turns,
+and Gemini calls. Production requires a certificate-verified database, explicit HTTPS origins and
+shared admission credentials. Delivery includes a Compose stack, a required CI image check, an HTTPS
+staging smoke test, a backup and rollback runbook, and thirteen additional synthetic evaluation cases.
 
-Gate: core tests pass in the deployment configuration, live workflows and traceability work, and results
-are reproducible. Do not label targets as measured performance.
+The [release runbook](release.md) describes deployment and recovery. The [Phase 6 review](phase-6-review.md)
+records local evidence and the status of the hosted release gate. Hosted deployment, live evaluations,
+and LangSmith delivery require an approved environment and provider configuration.
+
+## Current release follow-up — 27 November 2026
+
+Source head is `0008`: voice/text conversation separation (`0007`) and published return-policy
+history (`0008`) are implemented alongside live browser calls and admin policy controls.
+Runtime retries now cover known transient chat/query-embedding errors, count every attempt against
+shared quota, and keep text-provider work within a shared budget. SDK retries remain disabled.
+
+The original live result (25/36, 11 unavailable) remains the latest captured provider evidence.
+The release gate requires all 36 baseline and 13 release cases to pass using one turn attempt,
+matching current fixtures and runtime settings, within an explicitly chosen p95 latency target.
+See `scripts/check_release_evaluations.py` and [release](release.md). Hosting, current live evaluation,
+staging HTTPS/browser/voice verification and recovery rehearsal remain required before release.

@@ -56,7 +56,8 @@ npm audit --package-lock-only --audit-level=high
 ```
 
 Ordinary tests skip PostgreSQL integration checks unless `POSTGRES_TEST_URL` points to a
-dedicated disposable database. CI creates one and runs the full suite on Python 3.12/PostgreSQL 15
+dedicated disposable database. Create a fresh database before each full integration run.
+CI creates one and runs the full suite on Python 3.12/PostgreSQL 15
 and Python 3.13/PostgreSQL 17 using versioned pgvector images. No Supabase/Gemini account or repository
 secret is required for CI.
 External provider calls are mocked in the test suite. Real cloud verification is a separate explicit step.
@@ -74,6 +75,10 @@ npm run test:e2e
 Playwright starts both services and creates its own SQLite database. Ports 3100 and 8010 must be free.
 The local fixture exercises sessions, same-key refund retry, chat history and citations, staff review,
 and customer isolation. No hosted credentials are required.
+
+CI also builds both release images, validates the Compose and Caddy configuration, and verifies
+packaged migrations and startup against disposable PostgreSQL. See [release](docs/release.md) for
+the production configuration and staging smoke test.
 
 Update `backend/uv.lock` with Python dependency changes. Update `package-lock.json` with npm changes.
 Review Dependabot PRs normally; automatic merging is disabled. When updating Gitleaks/actionlint,

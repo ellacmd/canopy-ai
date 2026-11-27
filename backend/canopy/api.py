@@ -1,8 +1,5 @@
 import secrets
-from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from threading import Lock
-from time import monotonic
 from uuid import UUID
 
 import httpx
@@ -14,6 +11,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from canopy.admission import Admission
 from canopy.auth import (
     LoginRequest,
     Principal,
@@ -26,36 +24,15 @@ from canopy.auth import (
 )
 from canopy.config import Settings
 from canopy.db import get_db, make_engine
-from canopy.models import Customer, Order
+from canopy.models import AdmissionCounter, Customer, Order
 from canopy.operations_api import router as operations_router
 from canopy.order_views import OrderDetail, OrderSummary, Tracking, order_view
 from canopy.policy_api import router as policy_router
 from canopy.support_api import customer_tools
 from canopy.support_api import router as support_router
 from canopy.tools import SupportTools
+from canopy.voice import router as voice_router
 from canopy.workflow_api import router as workflow_router
-
-
-class LoginLimiter:
-    """Process-local development protection. Replace with shared limits before release."""
-
-    def __init__(self):
-        self.events: dict[str, deque] = defaultdict(deque)
-        self.lock = Lock()
-
-    def check(self, key: str) -> None:
-        with self.lock:
-            now = monotonic()
-            attempts = self.events[key]
-            while attempts and attempts[0] < now - 60:
-                attempts.popleft()
-            if len(attempts) >= 10:
-                raise HTTPException(429, "Too many attempts; try again in a minute")
-            attempts.append(now)
-            if len(self.events) > 10000:
-                self.events = defaultdict(
-                    deque, {k: v for k, v in self.events.items() if v and v[-1] >= now - 60}
-                )
 
 
 def set_session(response: Response, token: TokenResponse, settings: Settings) -> None:
@@ -80,18 +57,31 @@ def set_session(response: Response, token: TokenResponse, settings: Settings) ->
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     engine = make_engine(settings)
+    # A separate pool keeps admissions available while workflow transactions await providers.
+    admission_engine = make_engine(settings) if engine.dialect.name == "postgresql" else engine
+    admission = Admission(admission_engine, settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        with httpx.Client(timeout=10, follow_redirects=False) as client:
-            app.state.auth = SupabaseAuth(settings, client)
-            yield
-        engine.dispose()
+        try:
+            with httpx.Client(timeout=10, follow_redirects=False) as client:
+                app.state.auth = SupabaseAuth(settings, client)
+                yield
+        finally:
+            engine.dispose()
+            if admission_engine is not engine:
+                admission_engine.dispose()
 
-    app = FastAPI(title="Canopy AI", version="0.4.0", lifespan=lifespan)
+    production = settings.environment == "production"
+    app = FastAPI(
+        title="Canopy AI",
+        version="0.4.0",
+        lifespan=lifespan,
+        openapi_url=None if production else "/openapi.json",
+    )
     app.state.settings = settings
     app.state.engine = engine
-    limiter = LoginLimiter()
+    app.state.admission = admission
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(_request: Request, error: RequestValidationError):
@@ -100,32 +90,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status_code=422,
             content={
                 "detail": [
-                    {"loc": list(item["loc"]), "msg": item["msg"], "type": item["type"]}
+                    {
+                        "loc": list(
+                            item["loc"][:1] if item["type"] == "extra_forbidden" else item["loc"]
+                        ),
+                        "msg": "Invalid value" if item["type"] == "value_error" else item["msg"],
+                        "type": item["type"],
+                    }
                     for item in error.errors()
                 ]
             },
         )
+
+    @app.exception_handler(SQLAlchemyError)
+    async def database_failure(_request: Request, _error: SQLAlchemyError):
+        return JSONResponse({"detail": "Database is temporarily unavailable"}, status_code=503)
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "X-Request-ID", "Idempotency-Key"],
+        allow_headers=["Content-Type", "Authorization", "Idempotency-Key", "X-Request-ID"],
+        expose_headers=["Retry-After", "X-Request-ID"],
     )
 
     @app.middleware("http")
     async def request_guard(request: Request, call_next):
         # Origin checking also protects cookie-based login, refresh, and future mutations.
+        rejection = None
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             origin = request.headers.get("origin")
             if origin and origin not in settings.allowed_origins:
-                return JSONResponse({"detail": "Origin is not allowed"}, status_code=403)
-            if request.headers.get("sec-fetch-site") == "cross-site":
-                return JSONResponse(
-                    {"detail": "Cross-site requests are not allowed"}, status_code=403
-                )
-        response = await call_next(request)
+                rejection = "Origin is not allowed"
+            elif request.headers.get("sec-fetch-site") == "cross-site":
+                rejection = "Cross-site requests are not allowed"
+        response = (
+            JSONResponse({"detail": rejection}, status_code=403)
+            if rejection
+            else await call_next(request)
+        )
         response.headers["X-Request-ID"] = secrets.token_hex(16)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Cache-Control"] = "no-store"
@@ -133,15 +137,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health/live", tags=["health"])
     def live():
-        return {"status": "ok", "service": "canopy", "phase": 4}
+        return {"status": "ok", "service": "canopy", "phase": 6}
 
     @app.get("/health/ready", tags=["health"])
     def ready(db: Session = Depends(get_db)):
         try:
             revisions = db.scalars(text("SELECT version_num FROM alembic_version")).all()
-            if revisions != ["0005"]:
+            if revisions != ["0008"]:
                 raise HTTPException(503, "Database migrations are not current")
             db.execute(select(Customer.id).limit(1))
+            with admission_engine.connect() as connection:
+                connection.execute(select(AdmissionCounter.used).limit(1))
+                if (
+                    connection.dialect.name == "postgresql"
+                    and connection.scalar(text("SELECT current_user")) != "service_role"
+                ):
+                    raise HTTPException(503, "Database runtime role is unavailable")
         except SQLAlchemyError:
             raise HTTPException(503, "Database is unavailable or migrations have not run") from None
         return {"status": "ok", "database": "ready"}
@@ -153,7 +164,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response: Response,
         auth: SupabaseAuth = Depends(get_auth),
     ):
-        limiter.check(request.client.host if request.client else "unknown")
+        admission.login(request.client.host if request.client else "unknown", str(body.email))
         token = auth.login(body)
         # Verify against Auth before setting a session or trusting the role.
         principal = auth.verify(token.access_token.get_secret_value())
@@ -162,7 +173,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/auth/refresh", tags=["auth"])
     def refresh(request: Request, response: Response, auth: SupabaseAuth = Depends(get_auth)):
-        limiter.check(request.client.host if request.client else "unknown")
+        admission.refresh(request.client.host if request.client else "unknown")
         token = request.cookies.get("canopy_refresh")
         if not token:
             raise HTTPException(401, "Sign in to continue")
@@ -251,5 +262,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(support_router)
     app.include_router(policy_router)
     app.include_router(workflow_router)
+    app.include_router(voice_router)
     app.include_router(operations_router)
     return app
