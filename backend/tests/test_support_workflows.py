@@ -79,6 +79,41 @@ def test_eligibility_has_no_side_effects_and_returns_policy(client, engine):
         assert db.get(Order, seed_id("order", "AMZ-1024")).refund_reserved_amount == 0
 
 
+def test_admin_publishes_refund_rules_and_old_policy_cannot_submit(client):
+    url = "/api/policies/returns"
+    publication = {
+        "expected_revision": 1,
+        "rules": {
+            "return_days": 45,
+            "refund_percent": 50,
+            "max_item_quantity": 1,
+            "max_request_amount": "50.00",
+            "guidance": {"returns/return-window": "Keep your order number handy."},
+        },
+    }
+    assert (
+        client.put(url, json=publication, headers=headers(token="support-token")).status_code == 403
+    )
+    admin = headers(token="admin-token")
+    changed = client.put(url, json=publication, headers=admin)
+    assert changed.status_code == 200, changed.text
+    current = changed.json()
+    assert current["revision"] == 2
+    assert client.put(url, json=publication, headers=admin).status_code == 409
+    assert [row["revision"] for row in client.get(f"{url}/history", headers=admin).json()] == [2, 1]
+    decision = client.post("/api/refunds/eligibility", json=body(), headers=headers()).json()
+    assert (decision["policy_version"], decision["amount"]) == (current["version"], "44.50")
+    stale = client.post("/api/refunds", json=submission(), headers=headers("old-policy-refund-01"))
+    assert stale.status_code == 409
+    assert client.get("/api/refunds", headers=headers()).json() == []
+
+    publication["expected_revision"] = 2
+    publication["rules"]["max_request_amount"] = "25.00"
+    assert client.put(url, json=publication, headers=admin).status_code == 200
+    review = client.post("/api/refunds/eligibility", json=body(), headers=headers()).json()
+    assert (review["outcome"], review["reason_codes"]) == ("human_review", ["amount_limit"])
+
+
 def test_refund_is_simulated_confirmed_persisted_and_idempotent(client, engine):
     request = submission()
     first = client.post("/api/refunds", json=request, headers=headers("same-refund-key-001"))

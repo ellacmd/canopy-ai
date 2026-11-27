@@ -12,6 +12,7 @@ from canopy.corpus import CHUNKER_VERSION, Source, digest, load_corpus
 from canopy.embedding import EMBEDDING_SPACE, Embedder, EmbeddingUnavailable, unit_vector
 from canopy.models import PolicyChunk, PolicyDocument
 from canopy.policy import POLICY_VERSION
+from canopy.published_policy import latest_policy, published_section
 
 # Evaluated against the checked-in synthetic cases; cosine similarity, not confidence.
 MIN_SIMILARITY = 0.57
@@ -248,7 +249,9 @@ def conflict() -> SearchResult:
     )
 
 
-def search_policy(db: Session, embedder: Embedder, request: SearchRequest) -> SearchResult:
+def search_policy(
+    db: Session, embedder: Embedder, request: SearchRequest, *, before_query=None
+) -> SearchResult:
     """Validate evidence before spending query tokens; search only the current corpus."""
     sources = load_corpus()
     expected = {source.key: source for source in sources}
@@ -278,6 +281,8 @@ def search_policy(db: Session, embedder: Embedder, request: SearchRequest) -> Se
             return conflict()
     if embedder.space != EMBEDDING_SPACE:
         raise EmbeddingUnavailable("Query embedding space differs from the frozen index")
+    if before_query is not None:
+        before_query()
     vectors = embedder.embed([request.query], task="query")
     if len(vectors) != 1:
         raise EmbeddingUnavailable("Embedding provider returned an incomplete query")
@@ -309,23 +314,40 @@ def search_policy(db: Session, embedder: Embedder, request: SearchRequest) -> Se
     )[: request.limit]
     chunk_map = {chunk.id: chunk for chunk in chunks}
     document_map = {document.id: document for document in documents}
+    policy = latest_policy(db)
+    published = {
+        source.key: {
+            section.anchor: published_section(source, section, policy)
+            for section in source.sections
+        }
+        for source in sources
+    }
     citations = []
     for chunk_id, similarity in scores:
         if similarity < MIN_SIMILARITY:
             continue
         chunk = chunk_map[chunk_id]
         document = document_map[chunk.document_id]
+        rendered = published[document.source_key]
+        excerpt = rendered[chunk.anchor]
+        updated = policy.revision > 1
         citations.append(
             Citation(
                 source=document.source_key,
-                source_version=document.version,
-                rules_version=document.rules_version,
+                source_version=f"{policy.revision}.0" if updated else document.version,
+                rules_version=policy.version,
                 title=document.title,
                 section=chunk.heading,
-                locator=f"{document.storage_path}#{chunk.anchor}",
-                source_sha256=document.content_sha256,
-                chunk_sha256=chunk.content_sha256,
-                excerpt=chunk.content,
+                locator=(
+                    f"return-policy/{policy.revision}/{document.source_key}#{chunk.anchor}"
+                    if updated
+                    else f"{document.storage_path}#{chunk.anchor}"
+                ),
+                source_sha256=digest("\n\n".join(rendered.values()))
+                if updated
+                else document.content_sha256,
+                chunk_sha256=digest(excerpt) if updated else chunk.content_sha256,
+                excerpt=excerpt,
                 similarity=round(max(-1.0, min(1.0, float(similarity))), 6),
             )
         )
@@ -335,6 +357,7 @@ def search_policy(db: Session, embedder: Embedder, request: SearchRequest) -> Se
         )
     return SearchResult(
         status="evidence_found",
+        rules_version=policy.version,
         message=(
             "These excerpts are evidence, not an eligibility decision or a complete answer. "
             "Uncovered questions require human review; "

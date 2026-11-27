@@ -70,16 +70,15 @@ PostgreSQL RLS have been verified. No email was sent during synthetic account pr
 restricted, ignored backup of the local settings. Machine-specific project identity is in ignored `supabase/cloud.json`.
 Restart the API after switching environments. The product frontend and backend hosting are still deferred.
 
-## Foundation limits to address in later phases
+## Production behavior
 
-- The login rate limiter is process-local; shared rate limiting is required before release.
-- Supabase Auth is verified per request. Session refresh is an explicit endpoint; browser coordination
-  will be implemented with the UI.
-- Logout requests refresh-session revocation; already-issued access JWTs may remain valid until expiry.
-- Refund lifecycle transitions and reservation release remain deferred. Submitted requests are simulated.
-- Markdown policy ingestion and vector retrieval are implemented; uploads, conversation memory,
-  agent traces, and chat-model workflow evaluation remain deferred.
-- Future traces must transmit sanitized summaries/metadata rather than raw customer messages or graph state.
+- PostgreSQL shares authentication and workflow rate limits and daily Gemini usage counters. Counter
+  admissions commit before provider calls and survive a workflow rollback.
+- Supabase Auth verifies each authenticated request. The browser coordinates explicit refresh across
+  tabs. Logout requests refresh-session revocation. Access JWTs may remain valid until expiry.
+- Submitted refund requests are simulated. The deterministic policy and confirmation rules control
+  reservations. Manual LangSmith export sends allowlisted execution metadata.
+- [Release](release.md) documents the production HTTPS topology, credential configuration, and recovery.
 
 ## Phase 2 business operations
 

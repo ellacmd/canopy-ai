@@ -107,6 +107,59 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
 
+  release-images:
+    name: Release images and schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.2-pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: canopy_test_only
+          POSTGRES_DB: canopy_release_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:canopy_test_only@127.0.0.1:5432/canopy_release_test
+      ENVIRONMENT: test
+      CANOPY_RELEASE: ci
+      CANOPY_DOMAIN: canopy.example.com
+      CANOPY_SUPABASE_CA_FILE: /etc/ssl/certs/ca-certificates.crt
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate deployment configuration and build both images
+        run: |
+          cp backend/.env.example backend/.env
+          docker compose config --quiet
+          docker compose build backend web
+          docker run --rm -e CANOPY_DOMAIN \
+            --mount "type=bind,source=$PWD/deploy/Caddyfile,target=/etc/caddy/Caddyfile,readonly" \
+            caddy:2.11.9-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Verify packaged migration and application startup
+        run: |
+          docker run --rm -i --network host -e DATABASE_URL canopy-backend:ci python - <<'PY'
+          from os import environ
+          import psycopg
+          with psycopg.connect(environ["DATABASE_URL"].replace("+psycopg", "", 1)) as connection:
+              connection.execute("CREATE ROLE anon NOLOGIN")
+              connection.execute("CREATE ROLE authenticated NOLOGIN")
+              connection.execute("CREATE ROLE service_role NOLOGIN BYPASSRLS")
+          PY
+          docker run --rm --network host -e ENVIRONMENT -e DATABASE_URL canopy-backend:ci alembic upgrade head
+          docker run --rm --network host -e ENVIRONMENT -e DATABASE_URL canopy-backend:ci alembic check
+          trap 'docker rm -f canopy-release-api canopy-release-web >/dev/null 2>&1 || true' EXIT
+          docker run -d --network host --name canopy-release-api -e ENVIRONMENT -e DATABASE_URL canopy-backend:ci
+          docker run -d --network host --name canopy-release-web canopy-web:ci
+          curl --fail --silent --show-error --retry 12 --retry-all-errors --max-time 10 http://127.0.0.1:8000/health/ready
+          curl --fail --silent --show-error --retry 12 --retry-all-errors --max-time 10 http://127.0.0.1:3000/ -o /dev/null
+
   dependencies:
     name: Dependency audit
     runs-on: ubuntu-latest
@@ -128,7 +181,7 @@ jobs:
   required:
     name: Required CI
     if: ${{ always() }}
-    needs: [quality, backend-tests, frontend-tests, dependencies]
+    needs: [quality, backend-tests, frontend-tests, release-images, dependencies]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

@@ -175,7 +175,14 @@ export async function streamTurn(
         // FastAPI emits text deltas only after commit. Use the complete response for the transcript.
         if (event === "completed" && data) return JSON.parse(data) as TurnResult;
         if (event === "error" && data) {
-          const { status } = JSON.parse(data);
+          const { status, code, retry_after } = JSON.parse(data);
+          if (code === "daily_usage_budget") {
+            throw new ApiError(status, "The daily AI usage budget has been reached. Try again after midnight UTC.");
+          }
+          if (code === "rate_limit") {
+            const retryDelay = Math.max(1, Number(retry_after) || 60);
+            throw new ApiError(status, `Too many requests. Try again in ${retryDelay} seconds.`);
+          }
           throw new ApiError(status, status === 409
             ? "The conversation is busy or the quote changed. Retry or reload the conversation."
             : "The support turn could not finish. Retry this request.");

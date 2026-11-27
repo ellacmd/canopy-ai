@@ -26,6 +26,23 @@ Chat turns and policy search respect the existing backend provider opt-ins. The 
 synthetic provider responses and a disposable database. See [browser verification](CONTRIBUTING.md#required-checks)
 for the full local test command.
 
+### Live browser calls
+
+After configuring microphone audio processing for your Gemini project, set `VOICE_ENABLED=true`
+in the backend environment and restart FastAPI. Use HTTPS or localhost. Customers can select
+**Start call** from the Voice call workspace, interrupt spoken replies, mute, and end the call.
+The browser runs a local speech detector before opening a caller turn. A possible interruption
+briefly lowers the reply volume. The reply continues if the evidence fades, or stops when speech
+is sustained. The browser keeps a short audio buffer to preserve the first words and allows
+longer pauses during an unfinished thought when a live transcript is available.
+Call activity shows order lookups, policy checks, refund preparation, and staff routing as they run.
+Canopy can fill a refund preview from the details given on the call and routes policy exceptions
+to staff. A simulated submission requires the customer's explicit on-screen confirmation. The
+call acknowledges the result aloud. The authenticated same-origin WebSocket uses Gemini Live.
+Canopy saves call transcripts separately from text chat and stores verified policy evidence.
+Canopy does not store call audio. Enable `POLICY_SEARCH_ENABLED` for cited policy lookups and
+`WORKFLOW_ENABLED` for text support. The browser suite uses a synthetic voice provider.
+
 ## Start the backend
 
 Prerequisites: Python 3.12+ and [uv](https://docs.astral.sh/uv/).
@@ -184,7 +201,9 @@ requests revocation of the refresh session. Already-issued access JWTs may remai
 The Next.js rewrite serves the frontend and API on the same origin. Configure explicit
 `ALLOWED_ORIGINS` on the backend. Cookies are Secure in production and SameSite=Lax.
 Untrusted-origin mutations are rejected. Never return Auth tokens to frontend JavaScript or localStorage.
-Use HTTPS for production. Production startup rejects SQLite and incomplete Auth configuration.
+Production requires HTTPS, a PostgreSQL connection with hostname and CA verification, an explicit
+origin allowlist, and a shared admission secret. PostgreSQL enforces rate limits and daily AI call
+budgets across replicas. See the [release runbook](docs/release.md) for deployment and recovery.
 
 ## Current API endpoints
 
@@ -286,7 +305,7 @@ LangGraph and LangSmith are backend-only dependencies; no frontend provider keys
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for local hooks, Conventional Commits, pull requests, and
 checks. [Repository workflow](docs/repository-workflow.md) explains protected branches, CI, dependency
-updates, and the deferred deployment phase. Report vulnerabilities through [SECURITY.md](SECURITY.md).
+updates, and release checks. Report vulnerabilities through [SECURITY.md](SECURITY.md).
 The owner has deferred choosing a license; no open-source license is included yet.
 
 For the next development session, start with [docs/HANDOFF.md](docs/HANDOFF.md) and `AGENTS.md`.

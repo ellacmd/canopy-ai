@@ -1,6 +1,7 @@
 """Bounded conversation read models for the customer and staff workspaces."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -11,6 +12,7 @@ from canopy.models import AgentExecution, Message, WorkflowTurn
 from canopy.retrieval import Citation
 
 STAGES = {"classify", "context", "action", "respond"}
+TRACE_STATES = {"pending", "disabled", "unconfigured", "submitted", "failed"}
 
 
 class MessageView(BaseModel):
@@ -19,6 +21,7 @@ class MessageView(BaseModel):
     content: str
     created_at: datetime
     citations: list[Citation]
+    workflow: bool = False
 
 
 class ExecutionView(BaseModel):
@@ -31,6 +34,7 @@ class ExecutionView(BaseModel):
     input_tokens: int
     output_tokens: int
     stages: list[str]
+    trace_delivery: Literal["unknown", "pending", "disabled", "unconfigured", "submitted", "failed"]
 
 
 def recent_messages(
@@ -63,6 +67,7 @@ def recent_messages(
             content=record.content,
             created_at=record.created_at,
             citations=citations.get(str(record.id), []),
+            workflow=str(record.id) in citations,
         )
         for record in reversed(records)
     ]
@@ -79,8 +84,10 @@ def recent_executions(
         .limit(limit)
         .offset(offset)
     )
-    return [
-        ExecutionView(
+    result = []
+    for record in records:
+        trace_delivery = record.details.get("trace_delivery")
+        view = ExecutionView(
             id=record.id,
             trace_id=record.trace_id,
             conversation_id=record.conversation_id,
@@ -94,6 +101,9 @@ def recent_executions(
                 for stage in record.details.get("stages", [])
                 if isinstance(stage, str) and stage in STAGES
             ],
+            trace_delivery=trace_delivery
+            if isinstance(trace_delivery, str) and trace_delivery in TRACE_STATES
+            else "unknown",
         )
-        for record in records
-    ]
+        result.append(view)
+    return result

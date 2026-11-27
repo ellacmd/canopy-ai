@@ -107,22 +107,19 @@ class GeminiModel:
                 )
             text = response.text
             if not text or not text.strip():
-                raise ModelUnavailable("Gemini returned no usable response")
-            usage = response.usage_metadata
+                raise ModelUnavailable(
+                    "Gemini returned no usable response",
+                    code="empty_response",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    usage_complete=usage_complete,
+                )
             return ModelResult(
                 text=text.strip(),
                 model=self.settings.gemini_model,
-                input_tokens=(usage.prompt_token_count or 0) if usage else 0,
-                output_tokens=(
-                    (usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)
-                )
-                if usage
-                else 0,
-                usage_complete=bool(
-                    usage is not None
-                    and usage.prompt_token_count is not None
-                    and usage.candidates_token_count is not None
-                ),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                usage_complete=usage_complete,
             )
         except ModelUnavailable:
             raise

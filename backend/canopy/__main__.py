@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from canopy.admission import Admission
 from canopy.config import Settings
 from canopy.corpus import CorpusInvalid
 from canopy.db import make_engine
@@ -78,11 +79,13 @@ def main() -> int:
         "check-config", help="Show safe configuration status without making requests"
     )
     commands.add_parser("gemini-smoke", help="Make one tiny synthetic Gemini request")
+    commands.add_parser("prune-admission", help="Remove expired request and budget counters")
     workflow_eval = commands.add_parser(
         "workflow-evaluate", help="Live synthetic workflow evaluation in a dedicated local database"
     )
     workflow_eval.add_argument("--interval-seconds", type=float, default=4)
     workflow_eval.add_argument("--max-attempts", type=int, choices=range(1, 5), default=1)
+    workflow_eval.add_argument("--suite", choices=("baseline", "release"), default="baseline")
     commands.add_parser("embedding-smoke", help="Verify document/query access with synthetic text")
     commands.add_parser("policy-index", help="Atomically index the approved public Markdown corpus")
     commands.add_parser(
@@ -115,6 +118,9 @@ def main() -> int:
                     "policy_search_enabled": settings.policy_search_enabled,
                     "workflow_enabled": settings.workflow_enabled,
                     "workflow_tracing_enabled": settings.workflow_tracing_enabled,
+                    "admission_key_configured": bool(settings.admission_key.get_secret_value()),
+                    "gemini_chat_calls_per_day": settings.gemini_chat_calls_per_day,
+                    "gemini_embedding_calls_per_day": settings.gemini_embedding_calls_per_day,
                     "note": (
                         "Configuration presence only; this does not verify external connections"
                     ),
@@ -123,12 +129,25 @@ def main() -> int:
             )
         )
         return 0
+    if args.command == "prune-admission":
+        engine = make_engine(settings)
+        try:
+            print(json.dumps({"expired_counters_removed": Admission(engine, settings).prune()}))
+            return 0
+        except SQLAlchemyError:
+            print("Counter cleanup failed. Check the connection and migrations.", file=sys.stderr)
+            return 2
+        finally:
+            engine.dispose()
     if args.command == "workflow-evaluate":
         from canopy.workflow_eval import evaluate_workflow
 
         try:
             result = evaluate_workflow(
-                settings, interval=args.interval_seconds, max_attempts=args.max_attempts
+                settings,
+                interval=args.interval_seconds,
+                max_attempts=args.max_attempts,
+                suite=args.suite,
             )
             print(json.dumps(result, indent=2))
             return int(result["passed"] != result["cases"])

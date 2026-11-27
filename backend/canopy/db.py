@@ -22,7 +22,11 @@ class Base(DeclarativeBase):
 
 def make_engine(settings: Settings, *, runtime_role: bool = True) -> Engine:
     url = settings.database_url.get_secret_value()
-    options = {"connect_args": {"check_same_thread": False}} if url.startswith("sqlite") else {}
+    options = (
+        {"connect_args": {"check_same_thread": False}}
+        if url.startswith("sqlite")
+        else {"connect_args": {"connect_timeout": 5}, "pool_timeout": 5}
+    )
     engine = create_engine(url, pool_pre_ping=True, hide_parameters=True, **options)
     if engine.dialect.name == "sqlite":
 

@@ -1,6 +1,6 @@
 # Handoff for the next development session
 
-Updated 25 November 2026. Read this file, `AGENTS.md`, and `docs/plan.md` before changing code.
+Updated 26 November 2026. Read this file, `AGENTS.md`, and `docs/plan.md` before changing code.
 Machine-specific notes are in ignored `.local/HANDOFF.md` on the maintainer's machine. Public clones
 must configure their own services. Never print secret configuration to reconstruct context.
 
@@ -122,11 +122,11 @@ The browser suite in `tests/e2e/` runs both roles against a disposable FastAPI s
 external providers. Its commands are in `CONTRIBUTING.md`. Hosted provider measurements and the
 open reliability gate remain documented in `docs/phase-4-review.md`.
 
-## Next product phase, when requested
-
-Phase 6 handles release hardening, shared limits and budgets, operational retention/recovery, and
-deployment. Hosts, production environment, release artifacts, and rollback need to be selected
-before adding deployment jobs. No CI job migrates the live cloud database.
+Phase 6 adds shared admission limits, daily provider quotas, production checks, and trace delivery
+status. Current source migration head is `0006`. See [release](release.md) for the Compose topology,
+operations, and rollback. See [Phase 6 review](phase-6-review.md) for local verification and the remaining
+hosted rollout and live evaluation gate. The proposed topology needs a release host, HTTPS domain,
+separate Supabase environments and suitable Gemini and LangSmith credentials for live verification.
 
 ## Important limits and working rules
 
@@ -134,8 +134,8 @@ Keep Supabase CRUD server-only, RLS forced and client access denied. Runtime use
 migrations use the owner. Use verified Auth IDs/app_metadata and ownership filters on every tool.
 Do not expose auth tokens in JavaScript or let editable metadata grant roles.
 
-The login limiter is process-local; shared rate limiting and enforced usage budgets remain release work.
-The UI coordinates refresh across tabs. Logout revokes refresh sessions; issued access
+Shared limits and call budgets use PostgreSQL. The UI coordinates refresh across tabs.
+Logout revokes refresh sessions. Issued access
 tokens may remain valid until expiry. Future traces must contain sanitized metadata, not raw customer data.
 
 Never use the shared/cloud database as `POSTGRES_TEST_URL`, reset it, or re-date shared seed records.

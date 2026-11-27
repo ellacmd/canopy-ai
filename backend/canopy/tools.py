@@ -31,7 +31,8 @@ from canopy.models import (
     RefundRequest,
     Shipment,
 )
-from canopy.policy import POLICY_VERSION, ItemFacts, OrderFacts, evaluate_refund
+from canopy.policy import ItemFacts, OrderFacts, evaluate_refund
+from canopy.published_policy import PublishedPolicy, latest_policy
 
 
 def fingerprint(body) -> str:
@@ -83,8 +84,11 @@ class SupportTools:
         shipment = self.db.scalar(select(Shipment).where(Shipment.order_id == order.id))
         return order, shipment
 
-    def check_refund_eligibility(self, body: EligibilityInput, *, at=None, order=None):
+    def check_refund_eligibility(
+        self, body: EligibilityInput, *, at=None, order=None, policy: PublishedPolicy | None = None
+    ):
         order = order or self.get_order_details(body.order_id)
+        policy = policy or latest_policy(self.db)
         rows = self.db.execute(
             select(OrderItem, Product)
             .join(Product)
@@ -118,6 +122,8 @@ class SupportTools:
             {item.order_item_id: item.quantity for item in body.items},
             body.reason,
             at=at or datetime.now(UTC),
+            rules=policy.rules,
+            version=policy.version,
         )
 
     def _refund_replay(self, key: str, body):
@@ -185,11 +191,12 @@ class SupportTools:
             existing = self._refund_replay(key, body)
             if existing:
                 return existing
-            if body.policy_version != POLICY_VERSION:
+            policy = latest_policy(self.db, confirming=True)
+            if body.policy_version != policy.version:
                 raise HTTPException(
-                    409, {"code": "policy_changed", "policy_version": POLICY_VERSION}
+                    409, {"code": "policy_changed", "policy_version": policy.version}
                 )
-            decision = self.check_refund_eligibility(body, order=order)
+            decision = self.check_refund_eligibility(body, order=order, policy=policy)
             if decision.outcome != "eligible":
                 raise HTTPException(409, decision.model_dump(mode="json"))
             for item in sorted(body.items, key=lambda item: str(item.order_item_id)):
@@ -225,7 +232,7 @@ class SupportTools:
                 reason=body.reason,
                 customer_details=body.details,
                 eligibility_result=decision.model_dump(mode="json"),
-                policy_version=POLICY_VERSION,
+                policy_version=policy.version,
                 idempotency_key=key,
                 request_fingerprint=fingerprint(body),
                 confirmed_at=datetime.now(UTC),
@@ -247,7 +254,7 @@ class SupportTools:
                 "refund_request_created",
                 record,
                 {
-                    "policy_version": POLICY_VERSION,
+                    "policy_version": policy.version,
                     "amount": str(decision.amount),
                     "currency": order.currency,
                     "simulated": True,

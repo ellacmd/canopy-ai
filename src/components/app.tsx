@@ -1,23 +1,24 @@
 "use client";
 
-import { Activity, ArrowRight, BookOpen, Inbox, LogOut, MessageCircle, Package, ReceiptText, ShieldCheck } from "lucide-react";
+import { Activity, ArrowRight, BookOpen, Inbox, LogOut, MessageCircle, Package, Phone, ReceiptText, ShieldCheck } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, api, describeError, SESSION_EXPIRED, SESSION_REVISION, signIn, signOut } from "@/lib/api";
 import type { OrderDetail, Principal } from "@/lib/contracts";
 import { Chat } from "./chat";
 import { CustomerOrders, CustomerRefunds } from "./customer";
-import { Dashboard, PolicyAdministration, StaffInbox, StaffRefunds } from "./operations";
+import { Dashboard, StaffInbox, StaffRefunds } from "./operations";
+import { PolicyAdministration } from "./policy-administration";
 import { Brand, ErrorNotice, Loading } from "./ui";
 
 const customerNavigation = [
-  { id: "chat", text: "Support chat", icon: MessageCircle },
+  { id: "chat", text: "Support", icon: MessageCircle },
   { id: "orders", text: "My orders", icon: Package },
   { id: "customer-refunds", text: "Refund requests", icon: ReceiptText },
 ] as const;
 const staffNavigation = [
   { id: "inbox", text: "Support inbox", icon: Inbox },
   { id: "staff-refunds", text: "Refund review", icon: ReceiptText },
-  { id: "policies", text: "Policy administration", icon: BookOpen },
+  { id: "policies", text: "Return policy", icon: BookOpen },
   { id: "operations", text: "Operations", icon: Activity },
 ] as const;
 type Section = (typeof customerNavigation[number] | typeof staffNavigation[number])["id"];
@@ -73,6 +74,7 @@ function Workspace({ principal, onSignedOut }: { principal: Principal; onSignedO
   const navigation = isCustomer ? customerNavigation : staffNavigation;
   const [section, setSection] = useState<Section>(navigation[0].id);
   const [refundOrder, setRefundOrder] = useState<OrderDetail>();
+  const [callActive, setCallActive] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
 
@@ -116,12 +118,18 @@ function Workspace({ principal, onSignedOut }: { principal: Principal; onSignedO
     </aside>
     <main id="main-content" className="workspace" tabIndex={-1}>
       {error && <ErrorNotice message={error} />}
-      {isCustomer && <div hidden={section !== "chat"}><Chat reviewOrder={refundOrder} onReviewOpened={() => setRefundOrder(undefined)} /></div>}
+      {callActive && section !== "chat" && <aside className="ongoing-call">
+        <span role="status"><Phone size={16} aria-hidden /> Call in progress</span>
+        <button type="button" className="button secondary small" onClick={() => navigate("chat")}>Back to call</button>
+      </aside>}
+      {isCustomer && <div hidden={section !== "chat"}><Chat key={principal.id} customerId={principal.id}
+        callActive={callActive} onCallActive={setCallActive} reviewOrder={refundOrder}
+        onReviewOpened={() => setRefundOrder(undefined)} /></div>}
       {section === "orders" && <CustomerOrders onRefund={(order) => { setRefundOrder(order); navigate("chat"); }} />}
       {section === "customer-refunds" && <CustomerRefunds />}
       {section === "inbox" && <StaffInbox principal={principal} />}
       {section === "staff-refunds" && <StaffRefunds />}
-      {section === "policies" && <PolicyAdministration />}
+      {section === "policies" && <PolicyAdministration role={principal.role} />}
       {section === "operations" && <Dashboard />}
     </main>
   </div>;

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
@@ -16,9 +17,11 @@ from fastapi import HTTPException
 from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
 from pydantic import ValidationError
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from canopy.admission import Admission, LimitExceeded
 from canopy.checkpoints import TurnCheckpointSaver
 from canopy.config import Settings
 from canopy.contracts import EligibilityInput, EscalationInput, RefundInput
@@ -36,7 +39,7 @@ from canopy.models import (
     WorkflowCheckpoint,
     WorkflowTurn,
 )
-from canopy.policy import POLICY_VERSION
+from canopy.published_policy import latest_policy
 from canopy.retrieval import SearchRequest, search_policy
 from canopy.tools import SupportTools
 from canopy.workflow_contracts import (
@@ -45,6 +48,7 @@ from canopy.workflow_contracts import (
     QuoteView,
     TurnInput,
     TurnResult,
+    is_refund_affirmation,
 )
 from canopy.workflow_traces import export_trace
 
@@ -52,6 +56,7 @@ WORKFLOW_VERSION = "support-v1"
 MODEL = "gemini-3.5-flash-lite"
 PRICING_VERSION = "google-standard-2026-11-25"
 LOCKS = [Lock() for _ in range(64)]
+logger = logging.getLogger(__name__)
 
 
 class State(TypedDict, total=False):
@@ -113,7 +118,7 @@ def order_context(engine, customer_id, actor_id, number, order_id=None):
                 {
                     "status": shipment.status,
                     "carrier": shipment.carrier,
-                    "tracking_number": shipment.tracking_number,
+                    "tracking_number": shipment.tracking_number.removeprefix("SYNTHETIC-"),
                     "estimated_delivery": shipment.estimated_delivery.isoformat()
                     if shipment.estimated_delivery
                     else None,
@@ -136,14 +141,18 @@ def quote_view(quote: RefundQuote) -> QuoteView:
 
 
 class SupportWorkflow:
-    def __init__(self, engine, settings: Settings, *, customer_id, actor_id, model, embedder):
+    def __init__(
+        self, engine, settings: Settings, *, customer_id, actor_id, model, embedder, admission=None
+    ):
         self.engine, self.settings = engine, settings
         self.customer_id, self.actor_id = customer_id, actor_id
         self.model, self.embedder = model, embedder
+        self.admission = admission or Admission(engine, settings)
 
     def call(self, schema, payload, system):
         if self.settings.gemini_model != MODEL:
             raise ModelUnavailable("Support workflow requires its evaluated model")
+        self.admission.provider("chat", self.actor_id)
         self.stats["model_calls"] += 1
         try:
             result = self.model.generate_structured(
@@ -168,7 +177,9 @@ class SupportWorkflow:
             return schema.model_validate_json(result.text)
         except ValidationError:
             self.stats["error_code"] = "invalid_output"
-            raise ModelUnavailable("Support model output failed validation") from None
+            raise ModelUnavailable(
+                "Support model output failed validation", code="invalid_output"
+            ) from None
 
     def classify(self, state):
         if self.body.action != "message":
@@ -222,10 +233,13 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
         )
         needs_policy = intent in {"policy", "refund"} or bool(state.get("policy_query"))
 
+        def admit_embedding():
+            self.admission.provider("embedding", self.actor_id)
+            self.stats["embedding_calls"] += 1
+
         def policy():
             if not self.settings.policy_search_enabled or self.embedder is None:
                 return None
-            self.stats["embedding_calls"] += 1
             with Session(self.engine) as session:
                 try:
                     return search_policy(
@@ -234,8 +248,16 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                         SearchRequest(
                             query=state.get("policy_query") or "What are the standard return rules?"
                         ),
+                        before_query=admit_embedding,
                     )
-                except (EmbeddingUnavailable, CorpusInvalid):
+                except EmbeddingUnavailable:
+                    self.stats["error_code"] = "embedding_unavailable"
+                    return None
+                except LimitExceeded as error:
+                    self.stats["error_code"] = error.code
+                    return None
+                except CorpusInvalid:
+                    self.stats["error_code"] = "policy_corpus_invalid"
                     return None
 
         # These use separate sessions. No SQLAlchemy session crosses a worker boundary.
@@ -353,7 +375,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                         "id": f"refund_{i}",
                         "text": (
                             f"Refund request {record.id} is {record.status} for {record.amount}. "
-                            "It is simulated; no payment has been made."
+                            "No payment has been made."
                         ),
                         "required": True,
                     }
@@ -389,8 +411,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
         if (
             action == "message"
             and self.body.message
-            and self.body.message.lower().strip(".! ")
-            not in {"yes", "yes please", "confirm", "i confirm"}
+            and not is_refund_affirmation(self.body.message)
             and state.get("active_quote")
         ):
             self.cancel_quote(state["active_quote"])
@@ -408,10 +429,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
             )
             if quote is None:
                 raise HTTPException(404, "Refund quote not found")
-            if (
-                confirmation.policy_version != POLICY_VERSION
-                or quote.policy_version != POLICY_VERSION
-            ):
+            if confirmation.policy_version != quote.policy_version:
                 raise HTTPException(409, "Policy changed; request a new refund preview")
             if quote.status == "consumed":
                 refund = self.tools.get_refund_status(quote.refund_request_id)
@@ -426,7 +444,12 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                         409, "Quote is expired or superseded; request a new refund preview"
                     )
                 selection = EligibilityInput.model_validate(quote.selection)
-                decision = self.tools.check_refund_eligibility(selection)
+                policy = latest_policy(self.db, confirming=True)
+                if quote.policy_version != policy.version:
+                    raise HTTPException(
+                        409, "The return policy changed. Request a new refund preview."
+                    )
+                decision = self.tools.check_refund_eligibility(selection, policy=policy)
                 if (
                     decision.outcome != "eligible"
                     or decision.amount != quote.amount
@@ -435,7 +458,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                     raise HTTPException(409, "Order facts changed; request a new refund preview")
                 refund = self.tools.create_refund_request(
                     RefundInput(
-                        **selection.model_dump(), confirmed=True, policy_version=POLICY_VERSION
+                        **selection.model_dump(), confirmed=True, policy_version=policy.version
                     ),
                     f"quote-{quote.id}",
                 )
@@ -446,10 +469,8 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                 {
                     "id": "submitted",
                     "text": (
-                        f"Your simulated refund request is submitted for "
-                        f"{refund.amount} {refund.currency}. "
-                        "Submission is not approval or completed payment; "
-                        "no money has been transferred."
+                        f"I submitted your refund request for {refund.amount} {refund.currency}. "
+                        "No payment has been transferred."
                     ),
                     "required": True,
                 }
@@ -481,7 +502,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                     conversation_id=self.conversation.id,
                     order_id=order.id if order else None,
                     reason="human_requested",
-                    summary="Customer explicitly requested human support through the workflow.",
+                    summary="The customer asked to speak with a support specialist.",
                 ),
                 f"workflow-escalation-{self.turn_id}",
             )
@@ -490,8 +511,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                 {
                     "id": "escalated",
                     "text": (
-                        "A support ticket has been created for human review. "
-                        "This does not create or approve a refund."
+                        "I sent your request to the support team. They can see this conversation."
                     ),
                     "required": True,
                 }
@@ -509,7 +529,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                     selection=self.body.selection.model_dump(mode="json"),
                     amount=decision.amount,
                     currency=decision.currency,
-                    policy_version=POLICY_VERSION,
+                    policy_version=decision.policy_version,
                     expires_at=datetime.now(UTC) + timedelta(minutes=15),
                     status="pending",
                 )
@@ -523,19 +543,36 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                     {
                         "id": "quote",
                         "text": (
-                            "The selected quantities qualify for a simulated request of "
-                            f"{quote.amount} {quote.currency}. "
-                            "Review and explicitly confirm this preview within 15 minutes. "
-                            "Nothing has been submitted or reserved by this preview."
+                            f"Your refund request is for {quote.amount} {quote.currency}. "
+                            "Review and confirm the details within 15 minutes to submit it."
                         ),
                         "required": True,
                     }
                 )
             else:
-                result["state"] = (
-                    "needs_human_review" if decision.outcome == "human_review" else "ready"
-                )
                 facts.append({"id": "decision", "text": decision.explanation, "required": True})
+                if decision.outcome == "human_review":
+                    ticket = self.tools.create_escalation(
+                        EscalationInput(
+                            conversation_id=self.conversation.id,
+                            order_id=decision.order_id,
+                            reason="refund_exception",
+                            summary="Canopy sent this return to the support team for review.",
+                        ),
+                        f"return-review-{self.conversation.id}-{decision.order_id}",
+                    )
+                    result.update(
+                        state="needs_human_review", escalation=ticket.model_dump(mode="json")
+                    )
+                    facts.append(
+                        {
+                            "id": "review_ticket",
+                            "text": "I sent your return to the support team for review.",
+                            "required": True,
+                        }
+                    )
+                else:
+                    result["state"] = "ready"
         elif state["intent"] in {"refund", "confirmation"}:
             quote = (
                 self.db.scalar(
@@ -602,7 +639,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                     "id": "scope",
                     "text": (
                         "I can help with your Amazora orders, tracking, return policies, "
-                        "simulated refund requests, or human support."
+                        "refund requests, or human support."
                     ),
                     "required": True,
                 }
@@ -630,7 +667,10 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
             if len(set(reply.fact_ids)) != len(reply.fact_ids) or not set(reply.fact_ids) <= set(
                 facts
             ):
-                raise ModelUnavailable("Support reply referenced unverified evidence")
+                self.stats["error_code"] = "unverified_evidence"
+                raise ModelUnavailable(
+                    "Support reply referenced unverified evidence", code="unverified_evidence"
+                )
             selected = reply.fact_ids
             opening = reply.opening
         for fact_id, fact in facts.items():
@@ -675,6 +715,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
             "latency_ms": elapsed,
             **self.stats,
             "estimated_chat_cost_usd": str(cost.quantize(Decimal("0.00000001"))),
+            "trace_delivery": "pending" if self.settings.workflow_tracing_enabled else "disabled",
         }
         record = AgentExecution(
             id=uuid4(),
@@ -690,6 +731,20 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
             details=details,
         )
         return record
+
+    def deliver_trace(self, execution_id: UUID, details: dict) -> None:
+        if not self.settings.workflow_tracing_enabled:
+            return
+        delivered = export_trace(self.settings, self.trace_id, details)
+        try:
+            with self.engine.begin() as db:
+                db.execute(
+                    update(AgentExecution)
+                    .where(AgentExecution.id == execution_id)
+                    .values(details={**details, "trace_delivery": delivered})
+                )
+        except SQLAlchemyError:
+            logger.warning("Trace delivery status could not be recorded")
 
     def events(self, conversation_id: UUID, body: TurnInput, key: str):
         self.body, self.turn_id, self.trace_id = body, uuid4(), str(uuid4())
@@ -742,6 +797,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                     return
                 if self.conversation.status == "closed":
                     raise HTTPException(409, "This conversation is closed")
+                self.admission.turn(self.actor_id)
                 self.tools = SupportTools(
                     self.db, customer_id=self.customer_id, actor_user_id=self.actor_id, commit=False
                 )
@@ -772,7 +828,6 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                     role="customer",
                     content=body.message or f"Customer action: {body.action}",
                 )
-                self.db.add(customer_message)
                 # Disable inherited/ambient LangSmith callbacks around the complete graph.
                 with (
                     tracing_context(enabled=False),
@@ -800,7 +855,7 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                     role="assistant",
                     content=final["text"],
                 )
-                self.db.add(assistant)
+                self.db.add_all([customer_message, assistant])
                 self.db.flush()
                 execution = self.execution(
                     assistant.id, "succeeded", final["state"], final["intent"]
@@ -831,27 +886,38 @@ Never create confirmation, amounts, identity, item IDs, or financial actions."""
                 )
                 self.conversation.updated_at = datetime.now(UTC)
                 self.conversation.primary_intent = final["intent"]
-                safe_details = dict(execution.details)
+                execution_id, safe_details = execution.id, dict(execution.details)
                 self.db.commit()
                 committed = True
-                export_trace(self.settings, self.trace_id, safe_details)
+                self.deliver_trace(execution_id, safe_details)
                 yield "completed", response
-        except Exception:
-            if authorized and not committed:
+        except Exception as error:
+            if isinstance(error, LimitExceeded):
+                self.stats["error_code"] = error.code
+            attempt_used = self.stats["model_calls"] or self.stats["embedding_calls"]
+            if (
+                authorized
+                and not committed
+                and (not isinstance(error, LimitExceeded) or attempt_used)
+            ):
                 # Record safe failure usage after all domain changes roll back.
-                with Session(self.engine) as db:
-                    message = Message(
-                        id=uuid4(),
-                        conversation_id=conversation_id,
-                        role="system",
-                        content="Support turn failed; no workflow actions were committed.",
-                    )
-                    db.add(message)
-                    db.flush()
-                    execution = self.execution(message.id, "failed")
-                    db.add(execution)
-                    db.commit()
-                    export_trace(self.settings, self.trace_id, execution.details)
+                try:
+                    with Session(self.engine) as db:
+                        message = Message(
+                            id=uuid4(),
+                            conversation_id=conversation_id,
+                            role="system",
+                            content="Support turn failed; no workflow actions were committed.",
+                        )
+                        db.add(message)
+                        db.flush()
+                        execution = self.execution(message.id, "failed")
+                        db.add(execution)
+                        execution_id, details = execution.id, dict(execution.details)
+                        db.commit()
+                    self.deliver_trace(execution_id, details)
+                except SQLAlchemyError:
+                    logger.warning("Support execution failure could not be recorded")
             raise
         finally:
             lock.release()

@@ -71,7 +71,7 @@ export type Ticket = {
   created_at: string;
   updated_at: string;
 };
-export type Conversation = { id: string; status: string; updated_at: string; primary_intent: string | null };
+export type Conversation = { id: string; status: string; channel: "chat" | "call"; updated_at: string; primary_intent: string | null };
 export type Citation = {
   title: string;
   section: string;
@@ -80,7 +80,7 @@ export type Citation = {
   locator: string;
   excerpt: string;
 };
-export type Message = { id: string; role: string; content: string; created_at: string; citations: Citation[] };
+export type Message = { id: string; role: string; content: string; created_at: string; citations: Citation[]; workflow?: boolean };
 
 export type TurnBody =
   | { action: "message"; message: string }
@@ -109,6 +109,7 @@ export type Execution = {
   input_tokens: number;
   output_tokens: number;
   stages: string[];
+  trace_delivery: "unknown" | "pending" | "disabled" | "unconfigured" | "submitted" | "failed";
 };
 type Customer = { name: string; email: string };
 export type CaseContext = {
@@ -135,4 +136,17 @@ export type PolicyIndex = {
     status: "ready" | "missing" | "needs_review";
     sections: { heading: string; anchor: string; text: string }[];
   }[];
+};
+
+export type PublishedPolicy = {
+  revision: number;
+  version: string;
+  published_at: string;
+  rules: {
+    return_days: number;
+    refund_percent: number;
+    max_item_quantity: number | null;
+    max_request_amount: string | null;
+    guidance: Record<string, string>;
+  };
 };

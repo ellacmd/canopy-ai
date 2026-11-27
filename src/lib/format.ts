@@ -15,15 +15,32 @@ export function money(amount: string, currency: string) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(amount));
 }
 
+export function trackingNumber(value: string) {
+  return value.replace(/^SYNTHETIC-/, "");
+}
+
+const labels: Record<string, string> = {
+  refund_exception: "Return needs review",
+  human_requested: "Customer asked for help",
+  unsupported_request: "Request needs a specialist",
+  missing_information: "More information needed",
+  wrong_item: "Received the wrong item",
+  damaged: "Item arrived damaged",
+  other: "Another reason",
+  needs_review: "Needs attention",
+  succeeded: "Completed",
+  failed: "Couldn’t finish",
+};
+
 export function label(value: string) {
-  return value.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase());
+  return labels[value] ?? value.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase());
 }
 
 export const stageLabels: Record<string, string> = {
-  classify: "Understand request",
-  context: "Find relevant information",
-  action: "Check available actions",
-  respond: "Prepare response",
+  classify: "Read the request",
+  context: "Look up information",
+  action: "Check what Canopy can do",
+  respond: "Prepare a reply",
 };
 
 export const PAGE_SIZE = 20;

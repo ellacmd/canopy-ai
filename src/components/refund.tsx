@@ -6,18 +6,20 @@ import { ErrorNotice, Loading } from "./ui";
 
 const reasons: RefundReason[] = ["change_of_mind", "damaged", "wrong_item", "other"];
 
-export function RefundForm({ initialOrder, onPreview }: {
+export function RefundForm({ initialOrder, initialOrderId, onPreview }: {
   initialOrder?: OrderDetail;
+  initialOrderId?: string;
   onPreview: (selection: Selection) => void;
 }) {
   const [number, setNumber] = useState(initialOrder?.order_number ?? "");
-  const [orderPath, setOrderPath] = useState(initialOrder ? `/orders/${initialOrder.id}` : null);
-  const orders = useResource<Order[]>(initialOrder ? null : "/orders?limit=20");
+  const selectedId = initialOrder?.id ?? initialOrderId;
+  const [orderPath, setOrderPath] = useState(selectedId ? `/orders/${selectedId}` : null);
+  const orders = useResource<Order[]>(selectedId ? null : "/orders?limit=20");
   const order = useResource<OrderDetail>(orderPath);
 
   return <section className="inline-panel refund-form" aria-label="Refund selection">
     <h3>Choose items to review</h3>
-    {!initialOrder && <>
+    {!selectedId && <>
       {orders.resource.state === "loading" && <Loading>Loading recent orders…</Loading>}
       {orders.resource.state === "error" && <ErrorNotice message={orders.resource.error} retry={orders.reload} />}
       <form className="search-form" onSubmit={(event) => {
@@ -97,7 +99,7 @@ export function QuoteReview({ quote, disabled, onConfirm, onCancel }: {
 
   return <section className="quote inline-panel" aria-labelledby="quote-title">
     <div className="row-between"><h3 id="quote-title">Review refund preview</h3><strong className="quote-amount">{money(quote.amount, quote.currency)}</strong></div>
-    <p>Confirm to submit a simulated refund request. No payment will be transferred.</p>
+    <p>Check the items and amount, then confirm to submit your request.</p>
     {order.resource.state === "loading" && <Loading>Loading selected items…</Loading>}
     {order.resource.state === "error" && <ErrorNotice message={order.resource.error} retry={order.reload} />}
     {order.resource.state === "ready" && <ul className="item-list">
@@ -113,7 +115,7 @@ export function QuoteReview({ quote, disabled, onConfirm, onCancel }: {
     </dl>
     {expired && <p role="status">This preview expired. Request a new preview to confirm.</p>}
     <div className="actions">
-      <button type="button" className="button primary" disabled={disabled || expired || order.resource.state !== "ready"} onClick={onConfirm}>Confirm simulated refund</button>
+      <button type="button" className="button primary" disabled={disabled || expired || order.resource.state !== "ready"} onClick={onConfirm}>Submit refund request</button>
       <button type="button" className="button secondary" disabled={disabled} onClick={onCancel}>Cancel preview</button>
     </div>
   </section>;

@@ -117,9 +117,11 @@ Phase 4's live provider reliability gate remains open.
 
 ## Phase 6 — Reliability and release
 
-Expand evaluations and failure testing, add shared rate limits and enforced usage budgets, verify secure
-production configuration, health checks, CI, migrations, redaction, and browser behavior.
-Deploy frontend/backend/Supabase, document measured accuracy/latency/cost, and prepare portfolio evidence.
+Migration `0006` adds forced-RLS PostgreSQL admission counters for authentication, support turns,
+and Gemini calls. Production requires a certificate-verified database, explicit HTTPS origins and
+shared admission credentials. Delivery includes a Compose stack, a required CI image check, an HTTPS
+staging smoke test, a backup and rollback runbook, and thirteen additional synthetic evaluation cases.
 
-Gate: core tests pass in the deployment configuration, live workflows and traceability work, and results
-are reproducible. Do not label targets as measured performance.
+The [release runbook](release.md) describes deployment and recovery. The [Phase 6 review](phase-6-review.md)
+records local evidence and the status of the hosted release gate. Hosted deployment, live evaluations,
+and LangSmith delivery require an approved environment and provider configuration.

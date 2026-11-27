@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
+    BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -24,6 +25,25 @@ from canopy.db import Base
 
 def now() -> datetime:
     return datetime.now(UTC)
+
+
+class AdmissionCounter(Base):
+    __tablename__ = "admission_counters"
+    __table_args__ = (CheckConstraint("used > 0", name="positive_used"),)
+
+    bucket: Mapped[str] = mapped_column(String(64), primary_key=True)
+    expires_at: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
+    used: Mapped[int]
+
+
+class RefundPolicyRevision(Base):
+    __tablename__ = "refund_policy_revisions"
+    __table_args__ = (CheckConstraint("revision > 0", name="positive_revision"),)
+
+    revision: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    settings: Mapped[dict] = mapped_column(JSON)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    published_by: Mapped[UUID | None] = mapped_column(Uuid)
 
 
 class Record:
@@ -113,6 +133,7 @@ class Conversation(Record, Base):
         CheckConstraint("status IN ('active','resolved','escalated','closed')", name="status"),
     )
     customer_id: Mapped[UUID] = mapped_column(ForeignKey("customers.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(10), server_default="chat")
     status: Mapped[str] = mapped_column(String(20), default="active")
     primary_intent: Mapped[str | None] = mapped_column(String(40))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

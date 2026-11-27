@@ -8,6 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.requests import HTTPConnection
 
 from canopy.config import Settings
 from canopy.db import get_db
@@ -103,7 +104,7 @@ class SupabaseAuth:
         self._request("POST", "logout?scope=local", token=token)
 
 
-def get_auth(request: Request) -> SupabaseAuth:
+def get_auth(request: HTTPConnection) -> SupabaseAuth:
     return request.app.state.auth
 
 

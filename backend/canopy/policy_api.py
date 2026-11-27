@@ -7,8 +7,15 @@ from canopy.auth import Principal, current_principal, require_roles
 from canopy.corpus import CorpusInvalid, load_corpus
 from canopy.db import get_db
 from canopy.embedding import EmbeddingUnavailable, GeminiEmbedder
-from canopy.models import PolicyChunk, PolicyDocument
-from canopy.policy import POLICY_VERSION
+from canopy.models import PolicyChunk, PolicyDocument, RefundPolicyRevision
+from canopy.published_policy import (
+    PolicyPublication,
+    PublishedPolicy,
+    latest_policy,
+    publish,
+    published_section,
+    view,
+)
 from canopy.retrieval import SearchRequest, SearchResult, same_chunks, same_document, search_policy
 
 router = APIRouter(prefix="/api/policies", tags=["policy evidence"])
@@ -32,13 +39,19 @@ def get_embedder(request: Request):
 @router.post("/search", response_model=SearchResult)
 def search(
     body: SearchRequest,
+    request: Request,
     principal: Principal = Depends(current_principal),
     db: Session = Depends(get_db),
     embedder=Depends(get_embedder),
 ):
     # The approved public corpus is shared by all verified roles. No customer records are read.
     try:
-        return search_policy(db, embedder, body)
+        return search_policy(
+            db,
+            embedder,
+            body,
+            before_query=lambda: request.app.state.admission.provider("embedding", principal.id),
+        )
     except EmbeddingUnavailable:
         raise HTTPException(503, "Policy embedding provider is unavailable") from None
     except CorpusInvalid:
@@ -56,6 +69,7 @@ def index_status(
 ):
     try:
         sources = load_corpus()
+        current = latest_policy(db)
         results = []
         for source in sources:
             document = db.scalar(
@@ -88,13 +102,47 @@ def index_status(
                     "sha256": source.sha256,
                     "status": status,
                     "sections": [
-                        {"heading": section.heading, "anchor": section.anchor, "text": section.text}
+                        {
+                            "heading": section.heading,
+                            "anchor": section.anchor,
+                            "text": published_section(source, section, current),
+                        }
                         for section in source.sections
                     ],
                 }
             )
-        return {"rules_version": POLICY_VERSION, "sources": results}
+        return {"rules_version": current.version, "sources": results}
     except CorpusInvalid:
         raise HTTPException(503, "Approved policy corpus is invalid") from None
     except SQLAlchemyError:
         raise HTTPException(503, "Policy index is unavailable") from None
+
+
+@router.get("/returns", response_model=PublishedPolicy)
+def return_policy(
+    principal: Principal = Depends(require_roles("support", "admin")),
+    db: Session = Depends(get_db),
+):
+    return latest_policy(db)
+
+
+@router.get("/returns/history", response_model=list[PublishedPolicy])
+def return_policy_history(
+    principal: Principal = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    return [
+        view(record)
+        for record in db.scalars(
+            select(RefundPolicyRevision).order_by(RefundPolicyRevision.revision.desc()).limit(20)
+        )
+    ]
+
+
+@router.put("/returns", response_model=PublishedPolicy)
+def publish_return_policy(
+    publication: PolicyPublication,
+    principal: Principal = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    return publish(db, publication, principal.id)

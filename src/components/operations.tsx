@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Activity, FileCheck2, Inbox, TriangleAlert } from "lucide-react";
 import { api, describeError, jsonBody } from "@/lib/api";
-import type { CaseContext, Execution, PolicyIndex, Principal, QueueMetrics, Refund, RefundContext, Ticket, TicketStatus } from "@/lib/contracts";
+import type { CaseContext, Execution, Principal, QueueMetrics, Refund, RefundContext, Ticket, TicketStatus } from "@/lib/contracts";
 import { dateTime, label, money, PAGE_SIZE, stageLabels } from "@/lib/format";
 import { useResource } from "@/lib/use-resource";
 import { Badge, Empty, ErrorNotice, Loading, OrderContext, PageHeading, Pager, Transcript } from "./ui";
@@ -21,7 +21,7 @@ export function StaffInbox({ principal }: { principal: Principal }) {
   const [ticketId, setTicketId] = useState<string>();
   const tickets = useResource<Ticket[]>(`/admin/escalations?limit=${PAGE_SIZE}&offset=${offset}${filter === "all" ? "" : `&status=${filter}`}`);
   return <>
-    <PageHeading title="Support inbox">Review customer escalations and update ticket status.</PageHeading>
+    <PageHeading title="Support inbox">Follow up on requests that need a person.</PageHeading>
     <div className="split">
       <section className="panel" aria-labelledby="ticket-list-title">
         <div className="panel-header"><h2 id="ticket-list-title">Tickets</h2><Inbox size={20} aria-hidden /></div>
@@ -36,7 +36,7 @@ export function StaffInbox({ principal }: { principal: Principal }) {
         {tickets.resource.state === "loading" && <Loading />}
         {tickets.resource.state === "error" && <ErrorNotice message={tickets.resource.error} retry={tickets.reload} />}
         {tickets.resource.state === "ready" && <>
-          {!tickets.resource.data.length && <Empty title="No matching tickets on this page" />}
+          {!tickets.resource.data.length && <Empty title="No tickets match this filter" />}
           <ul className="record-list">
             {tickets.resource.data.map((ticket) => <li key={ticket.id}>
               <button type="button" className="record-button" aria-pressed={ticketId === ticket.id} onClick={() => setTicketId(ticket.id)}>
@@ -50,7 +50,7 @@ export function StaffInbox({ principal }: { principal: Principal }) {
       <section className="panel" aria-labelledby="ticket-detail-title">
         <div className="panel-header"><h2 id="ticket-detail-title">Ticket details</h2></div>
         {ticketId ? <TicketDetail key={ticketId} id={ticketId} principal={principal} onUpdated={tickets.reload} />
-          : <Empty title="Select a ticket">Customer, order, and conversation details appear here.</Empty>}
+          : <Empty title="Choose a ticket to see what happened" />}
       </section>
     </div>
   </>;
@@ -66,8 +66,9 @@ function TicketDetail({ id, principal, onUpdated }: { id: string; principal: Pri
   return <div className="detail-stack">
     <div>
       <div className="row-between"><h3>{label(current.reason)}</h3><Badge value={current.status} /></div>
-      <p className="prewrap">{current.summary}</p>
-      <code className="identifier">{current.id}</code>
+      <p className="prewrap">{current.summary === "The return policy requires a specialist to review this voice refund."
+        ? "Canopy handed this return to your team during a call." : current.summary}</p>
+
     </div>
     <dl className="facts">
       <div><dt>Customer</dt><dd>{customer.name}<br />{customer.email}</dd></div>
@@ -75,14 +76,14 @@ function TicketDetail({ id, principal, onUpdated }: { id: string; principal: Pri
       <div><dt>Updated</dt><dd>{dateTime(current.updated_at)}</dd></div>
     </dl>
     {saved && <p className="notice success" role="status">Ticket update saved.</p>}
-    {current.resolution_note && <div><h3>Saved resolution note</h3><p className="prewrap">{current.resolution_note}</p></div>}
+    {current.resolution_note && <div><h3>Resolution note</h3><p className="prewrap">{current.resolution_note}</p></div>}
     {current.status !== "closed" && <TicketUpdate key={current.updated_at} ticket={current} onUpdated={(record) => {
       setSaved(record);
       onUpdated();
     }} />}
-    <details><summary>Order context</summary>{order ? <OrderContext order={order} /> : <p className="muted">No order is attached to this ticket.</p>}</details>
-    <details><summary>Recent conversation</summary>{messages.length ? <Transcript messages={messages} /> : <p className="muted">No conversation messages.</p>}</details>
-    <details><summary>Execution timeline</summary><ExecutionTimeline executions={executions} /></details>
+    <details><summary>Order details</summary>{order ? <OrderContext order={order} /> : <p className="muted">This ticket has no linked order.</p>}</details>
+    <details><summary>Conversation</summary>{messages.some((message) => message.role !== "system") ? <Transcript messages={messages.filter((message) => message.role !== "system")} /> : <p className="muted">There’s no conversation on this ticket yet.</p>}</details>
+    <details><summary>Request activity</summary><ActivityTable executions={executions} /></details>
   </div>;
 }
 
@@ -112,7 +113,7 @@ function TicketUpdate({ ticket, onUpdated }: { ticket: Ticket; onUpdated: (ticke
     <label className="checkbox"><input type="checkbox" name="assign" disabled={pending} /> Assign to me</label>
     <label>Resolution note<textarea name="note" rows={3} maxLength={2000} disabled={pending} /></label>
     {error && <ErrorNotice message={error} />}
-    <div><button type="submit" className="button primary" disabled={pending}>{pending ? "Saving…" : "Save ticket update"}</button></div>
+    <div><button type="submit" className="button primary" disabled={pending}>{pending ? "Saving…" : "Save changes"}</button></div>
   </form>;
 }
 
@@ -122,7 +123,7 @@ export function StaffRefunds() {
   const refunds = useResource<Refund[]>(`/admin/refunds?limit=${PAGE_SIZE}&offset=${offset}`);
   const detail = useResource<RefundContext>(selected ? `/admin/refunds/${selected}/context` : null);
   return <>
-    <PageHeading title="Refund review">Inspect simulated submissions, item amounts, and recorded confirmation.</PageHeading>
+    <PageHeading title="Refund review">See what customers asked to return and what they confirmed.</PageHeading>
     <div className="split">
       <section className="panel" aria-labelledby="refund-list-title">
         <div className="panel-header"><h2 id="refund-list-title">Requests</h2><button type="button" className="button small secondary" onClick={refunds.reload}>Refresh</button></div>
@@ -155,73 +156,44 @@ export function StaffRefunds() {
 function RefundDetail({ context: { refund, customer, order } }: { context: RefundContext }) {
   return <div className="detail-stack">
     <div>
-      <div className="row-between"><h3>{money(refund.amount, refund.currency)} · Simulated</h3><Badge value={refund.status} /></div>
-      <code className="identifier">{refund.id}</code>
+      <div className="row-between"><h3>{money(refund.amount, refund.currency)} · Refund request</h3><Badge value={refund.status} /></div>
+
     </div>
     <dl className="facts">
       <div><dt>Customer</dt><dd>{customer.name}<br />{customer.email}</dd></div>
       <div><dt>Reason</dt><dd>{label(refund.reason)}</dd></div>
-      <div><dt>Policy</dt><dd>{refund.policy_version}</dd></div>
-      <div><dt>Confirmation</dt><dd>{refund.confirmed_at ? dateTime(refund.confirmed_at) : "No confirmation recorded"}</dd></div>
+      <div><dt>Customer confirmed</dt><dd>{refund.confirmed_at ? dateTime(refund.confirmed_at) : "Confirmation unavailable"}</dd></div>
     </dl>
     <div>
       <h3>Refund items</h3>
       {refund.items.length ? <ul className="item-list">
         {refund.items.map((item) => <li key={item.order_item_id}>
-          <span>{order.items.find((record) => record.order_item_id === item.order_item_id)?.product_name ?? item.order_item_id} ×{item.quantity}</span>
+          <span>{order.items.find((record) => record.order_item_id === item.order_item_id)?.product_name ?? "Item details unavailable"} ×{item.quantity}</span>
           <strong>{money(item.amount, refund.currency)}</strong>
         </li>)}
-      </ul> : <p className="muted">No item allocations recorded.</p>}
+      </ul> : <p className="muted">Item details are unavailable for this refund.</p>}
     </div>
-    <details><summary>Order context</summary><OrderContext order={order} /></details>
+    <details><summary>Order details</summary><OrderContext order={order} /></details>
   </div>;
 }
 
-export function PolicyAdministration() {
-  const { resource, reload } = useResource<PolicyIndex>("/policies/index");
-  return <>
-    <PageHeading title="Policy administration">Inspect the approved Amazora policy sources and their retrieval index.</PageHeading>
-    <section className="panel" aria-label="Approved policy sources">
-      <div className="panel-header"><h2>Approved sources</h2><button type="button" className="button secondary small" onClick={reload}>Refresh index status</button></div>
-      {resource.state === "loading" && <Loading />}
-      {resource.state === "error" && <ErrorNotice message={resource.error} retry={reload} />}
-      {resource.state === "ready" && <>
-        <p className="muted">Rules version {resource.data.rules_version}</p>
-        <div className="policy-grid">
-          {resource.data.sources.map((source) => <article className="inline-panel policy-card" key={source.source}>
-            <div className="row-between"><FileCheck2 size={21} aria-hidden /><Badge value={source.status} /></div>
-            <h3>{source.title}</h3>
-            <p className="muted">Version {source.version} · {source.sections.length} sections</p>
-            <details><summary>View approved source</summary>
-              <p className="muted">SHA-256 <code className="identifier">{source.sha256}</code></p>
-              {source.sections.map((section) => <details key={section.anchor}>
-                <summary>{section.heading}</summary>
-                <p className="prewrap">{section.text.split("\n\n").slice(2).join("\n\n")}</p>
-              </details>)}
-            </details>
-          </article>)}
-        </div>
-      </>}
-    </section>
-  </>;
-}
-
-export function ExecutionTimeline({ executions }: { executions: Execution[] }) {
-  if (!executions.length) return <Empty title="No executions on this page" />;
-  return <ol className="timeline">
-    {executions.map((execution) => <li key={execution.id}>
-      <details>
-        <summary><span>{dateTime(execution.created_at)}</span><Badge value={execution.status} /><span>{execution.latency_ms.toLocaleString()} ms</span></summary>
-        <dl className="facts">
-          <div><dt>Trace ID</dt><dd><code className="identifier">{execution.trace_id}</code></dd></div>
-          <div><dt>Tokens</dt><dd>{execution.input_tokens.toLocaleString()} input · {execution.output_tokens.toLocaleString()} output</dd></div>
-        </dl>
-        {execution.stages.length ? <ol className="execution-stages">
-          {execution.stages.map((stage, index) => <li key={`${stage}-${index}`}>{stageLabels[stage] ?? label(stage)}</li>)}
-        </ol> : <p className="muted">No stages recorded.</p>}
-      </details>
-    </li>)}
-  </ol>;
+function ActivityTable({ executions }: { executions: Execution[] }) {
+  if (!executions.length) return <Empty title="No request activity yet" />;
+  return <div className="table-scroll" tabIndex={0} role="region" aria-label="Request activity table">
+    <table className="activity-table" aria-label="Request activity">
+      <thead><tr><th scope="col">Time</th><th scope="col">Outcome</th><th scope="col">Time taken</th><th scope="col">What happened</th></tr></thead>
+      <tbody>{executions.map((execution) => <tr key={execution.id}>
+        <td><time dateTime={execution.created_at}>{dateTime(execution.created_at)}</time></td>
+        <td><Badge value={execution.status} /></td>
+        <td>{execution.latency_ms < 1000 ? "Under a second" : `${(execution.latency_ms / 1000).toFixed(1)} sec`}</td>
+        <td>{execution.stages.length ? <details>
+          <summary>View steps</summary>
+          <ol className="execution-stages">{execution.stages.map((stage, index) =>
+            <li key={`${stage}-${index}`}>{stageLabels[stage] ?? "Processed the request"}</li>)}</ol>
+        </details> : <span className="muted">Steps unavailable</span>}</td>
+      </tr>)}</tbody>
+    </table>
+  </div>;
 }
 
 export function Dashboard() {
@@ -229,25 +201,25 @@ export function Dashboard() {
   const metrics = useResource<QueueMetrics>("/admin/queue-metrics");
   const executions = useResource<Execution[]>(`/admin/executions?limit=${PAGE_SIZE}&offset=${offset}`);
   return <>
-    <PageHeading title="Operations">Monitor support queues and inspect workflow executions.</PageHeading>
+    <PageHeading title="Operations">See how many requests are waiting and how Canopy handled them.</PageHeading>
     {metrics.resource.state === "loading" && <Loading>Loading metrics…</Loading>}
     {metrics.resource.state === "error" && <ErrorNotice message={metrics.resource.error} retry={metrics.reload} />}
     {metrics.resource.state === "ready" && <dl className="metric-grid">
       {([
-        ["Active tickets", metrics.resource.data.active_tickets, Inbox],
+        ["Tickets to follow up", metrics.resource.data.active_tickets, Inbox],
         ["Submitted refunds", metrics.resource.data.submitted_refunds, FileCheck2],
-        ["Recorded executions", metrics.resource.data.executions, Activity],
-        ["Failed executions", metrics.resource.data.failed_executions, TriangleAlert],
+        ["Requests handled", metrics.resource.data.executions, Activity],
+        ["Requests that couldn’t finish", metrics.resource.data.failed_executions, TriangleAlert],
       ] as const).map(([title, value, Icon]) => <div className="panel metric" key={title}>
         <Icon size={20} aria-hidden /><dt>{title}</dt><dd>{value.toLocaleString()}</dd>
       </div>)}
     </dl>}
-    <section className="panel" aria-label="Workflow execution timeline">
-      <div className="panel-header"><h2>Execution timeline</h2><button type="button" className="button small secondary" onClick={() => { metrics.reload(); executions.reload(); }}>Refresh</button></div>
+    <section className="panel" aria-labelledby="request-activity-title">
+      <div className="panel-header"><h2 id="request-activity-title">Request activity</h2><button type="button" className="button small secondary" onClick={() => { metrics.reload(); executions.reload(); }}>Refresh</button></div>
       {executions.resource.state === "loading" && <Loading />}
       {executions.resource.state === "error" && <ErrorNotice message={executions.resource.error} retry={executions.reload} />}
       {executions.resource.state === "ready" && <>
-        <ExecutionTimeline executions={executions.resource.data} />
+        <ActivityTable executions={executions.resource.data} />
         <Pager count={executions.resource.data.length} offset={offset} onChange={setOffset} />
       </>}
     </section>

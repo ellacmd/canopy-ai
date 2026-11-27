@@ -1,7 +1,8 @@
 # Working on Canopy AI
 
 Read `docs/HANDOFF.md`, `docs/plan.md`, and `docs/amazora-rules.md` before implementation.
-The owner requested phased, backend-first work. Phases 1–5 are implemented.
+The owner requested phased, backend-first work. Phases 1–5 and Phase 6 release hardening are implemented.
+Hosted deployment and live release gates are tracked in `docs/phase-6-review.md`.
 Do not start another phase unless requested. Do not delegate to other agents unless requested.
 
 ## Data and safety boundaries

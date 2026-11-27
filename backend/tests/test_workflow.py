@@ -135,7 +135,7 @@ def test_multiturn_order_tracking_and_checkpoint_survive_new_workflow_instance(
     first = invoke(workflow_setup, {"message": "Order status AMZ-1024"})
     second = invoke(workflow_setup, {"message": "Where is it?"})
     assert first.order["order_number"] == "AMZ-1024"
-    assert second.intent == "tracking" and "SYNTHETIC-AMZ-1024" in second.text
+    assert second.intent == "tracking" and "tracking number AMZ-1024" in second.text
     with Session(engine) as db:
         checkpoint = db.scalar(select(WorkflowCheckpoint))
         assert checkpoint.snapshot["checkpoint"]["channel_values"]["order_number"] == "AMZ-1024"
@@ -154,7 +154,7 @@ def test_confirmation_is_explicit_quote_scoped_atomic_and_idempotent(workflow_se
     key = str(uuid4())
     confirmed = invoke(workflow_setup, body, key)
     assert confirmed.state == "submitted" and confirmed.refund["simulated"] is True
-    assert "not approval" in confirmed.text
+    assert "No payment has been transferred" in confirmed.text
     assert invoke(workflow_setup, body, key).replayed
     assert invoke(workflow_setup, body).refund["replayed"]
     with Session(engine) as db:

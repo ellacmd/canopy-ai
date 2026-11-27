@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, describeError } from "./api";
 
 type Resource<T> =
@@ -8,6 +8,7 @@ type Resource<T> =
 
 export function useResource<T>(path: string | null) {
   const [version, setVersion] = useState(0);
+  const reload = useCallback(() => setVersion((previous) => previous + 1), []);
   const [result, setResult] = useState<{ path: string; version: number; resource: Resource<T> }>();
 
   useEffect(() => {
@@ -27,5 +28,5 @@ export function useResource<T>(path: string | null) {
 
   const resource: Resource<T> =
     result && result.path === path && result.version === version ? result.resource : { state: "loading" };
-  return { resource, reload: () => setVersion((previous) => previous + 1) };
+  return { resource, reload };
 }

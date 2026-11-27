@@ -5,7 +5,9 @@ import os
 import sys
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from hashlib import sha256
 from importlib.resources import files
+from math import ceil
 from pathlib import Path
 from time import perf_counter, sleep
 from uuid import uuid4
@@ -28,6 +30,29 @@ from canopy.seed import seed_data, seed_id
 from canopy.workflow import MODEL, PRICING_VERSION, SupportWorkflow
 from canopy.workflow_contracts import TurnInput
 
+TRANSIENT_MODEL_CODES = {
+    "rate_limited",
+    "provider_http_500",
+    "provider_http_502",
+    "provider_http_503",
+    "provider_http_504",
+    "provider_ReadTimeout",
+    "provider_ConnectTimeout",
+    "provider_ConnectError",
+    "provider_RemoteProtocolError",
+    "provider_unavailable",
+}
+SUITES = {"baseline": "workflow-v1.json", "release": "workflow-release-v1.json"}
+
+
+def percentiles(values: list[float]) -> dict:
+    ordered = sorted(values)
+    return {
+        "samples": len(ordered),
+        "p50": ordered[ceil(len(ordered) * 0.50) - 1] if ordered else None,
+        "p95": ordered[ceil(len(ordered) * 0.95) - 1] if ordered else None,
+    }
+
 
 class PacedModel:
     """Evaluation-only pacing. Runtime requests still make one attempt and fail explicitly."""
@@ -49,7 +74,9 @@ class PacedModel:
             self.latencies.append((perf_counter() - self.last_started) * 1000)
 
 
-def evaluate_workflow(settings: Settings, *, interval: float = 4, max_attempts: int = 1) -> dict:
+def evaluate_workflow(
+    settings: Settings, *, interval: float = 4, max_attempts: int = 1, suite: str = "baseline"
+) -> dict:
     url = os.getenv("WORKFLOW_EVAL_DATABASE_URL", "")
     parsed = make_url(url) if url else None
     if (
@@ -88,7 +115,8 @@ def evaluate_workflow(settings: Settings, *, interval: float = 4, max_attempts: 
     model = GeminiModel(settings)
     paced = PacedModel(model, interval)
     embedder = GeminiEmbedder(settings)
-    cases = json.loads(files("canopy").joinpath("evaluations/workflow-v1.json").read_text())
+    fixture = files("canopy").joinpath("evaluations", SUITES[suite]).read_bytes()
+    cases = json.loads(fixture)
     customer = seed_id("customer", "maya")
     actor = uuid4()
     results = []
@@ -106,9 +134,17 @@ def evaluate_workflow(settings: Settings, *, interval: float = 4, max_attempts: 
 
             observations = []
             timings = []
+            model_errors = []
             provider_start = len(paced.latencies)
 
-            def run(body, key=None, cid=cid, timings=timings, observations=observations):
+            def run(
+                body,
+                key=None,
+                cid=cid,
+                timings=timings,
+                observations=observations,
+                model_errors=model_errors,
+            ):
                 start = perf_counter()
                 waiting = len(paced.waits)
                 turn_key = key or str(uuid4())
@@ -125,17 +161,8 @@ def evaluate_workflow(settings: Settings, *, interval: float = 4, max_attempts: 
                             ).run(cid, TurnInput.model_validate(body), turn_key)
                             break
                         except ModelUnavailable as error:
-                            transient = error.code in {
-                                "rate_limited",
-                                "provider_http_500",
-                                "provider_http_502",
-                                "provider_http_503",
-                                "provider_http_504",
-                                "provider_ReadTimeout",
-                                "provider_ConnectTimeout",
-                                "provider_ConnectError",
-                                "provider_RemoteProtocolError",
-                            }
+                            model_errors.append(error.code)
+                            transient = error.code in TRANSIENT_MODEL_CODES
                             if not transient or attempt + 1 == max_attempts:
                                 raise
                             wait = perf_counter()
@@ -165,12 +192,24 @@ def evaluate_workflow(settings: Settings, *, interval: float = 4, max_attempts: 
                         )
                         if turn.get("citation"):
                             checks.append(bool(result.citations))
+                        if expected := turn.get("evidence"):
+                            checks.append(
+                                any(
+                                    citation.source == expected["source"]
+                                    and citation.locator.rsplit("#", 1)[-1] == expected["anchor"]
+                                    and citation.source_version == "1.0"
+                                    and citation.rules_version == POLICY_VERSION
+                                    for citation in result.citations
+                                )
+                            )
                         if turn.get("order_number"):
                             checks.append(
                                 result.order
                                 and result.order["order_number"] == turn["order_number"]
                             )
                         checks.append(result.refund is None and result.escalation is None)
+                        if turn.get("order_absent"):
+                            checks.append(result.order is None)
                 else:
                     oid, iid = uuid4(), uuid4()
                     with Session(engine) as db, db.begin():
@@ -250,6 +289,11 @@ def evaluate_workflow(settings: Settings, *, interval: float = 4, max_attempts: 
                             .where(RefundRequest.order_id == oid)
                         )
                         checks.append(count == (1 if case["flow"] == "refund_submit" else 0))
+            except ModelUnavailable as error:
+                error_code = (
+                    "provider_unavailable" if error.code in TRANSIENT_MODEL_CODES else error.code
+                )
+                checks.append(False)
             except Exception as error:
                 error_code = (
                     "request_rejected"
@@ -263,6 +307,12 @@ def evaluate_workflow(settings: Settings, *, interval: float = 4, max_attempts: 
                     select(AgentExecution).where(AgentExecution.conversation_id == cid)
                 ).all()
                 details = [e.details for e in executions]
+                if (
+                    error_code is None
+                    and not all(checks)
+                    and any(d.get("error_code") == "embedding_unavailable" for d in details)
+                ):
+                    error_code = "provider_unavailable"
                 result = {
                     "id": case["id"],
                     "passed": bool(checks) and all(checks),
@@ -274,6 +324,7 @@ def evaluate_workflow(settings: Settings, *, interval: float = 4, max_attempts: 
                     "model_calls": sum(d["model_calls"] for d in details),
                     "embedding_calls": sum(d["embedding_calls"] for d in details),
                     "usage_complete": all(d["usage_complete"] for d in details),
+                    "model_errors_across_attempts": model_errors,
                     "error_codes": [d.get("error_code") for d in details if d.get("error_code")],
                     "observed": observations,
                     "latency_ms_excluding_pacing": timings,
@@ -289,12 +340,29 @@ def evaluate_workflow(settings: Settings, *, interval: float = 4, max_attempts: 
                     flush=True,
                 )
         return {
+            "suite": suite,
+            "fixture_sha256": sha256(fixture).hexdigest(),
             "model": MODEL,
             "pricing_version": PRICING_VERSION,
             "cases": len(results),
             "maximum_turn_attempts": max_attempts,
             "minimum_seconds_between_model_calls": interval,
             "passed": sum(row["passed"] for row in results),
+            "provider_unavailable": sum(row["error"] == "provider_unavailable" for row in results),
+            "cases_with_provider_attempt_errors": sum(
+                any(code in TRANSIENT_MODEL_CODES for code in row["model_errors_across_attempts"])
+                for row in results
+            ),
+            "turn_latency_ms_excluding_pacing": percentiles(
+                [value for row in results for value in row["latency_ms_excluding_pacing"]]
+            ),
+            "provider_latency_ms": percentiles(
+                [value for row in results for value in row["provider_latency_ms"]]
+            ),
+            "estimated_chat_cost_usd": str(
+                sum((Decimal(row["estimated_chat_cost_usd"]) for row in results), Decimal("0"))
+            ),
+            "incomplete_chat_usage_cases": sum(not row["usage_complete"] for row in results),
             "cost_scope": "Chat only; embeddings and failed unreported provider usage excluded",
             "results": results,
         }
